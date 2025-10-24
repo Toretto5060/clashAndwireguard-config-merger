@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WireGuard 配置管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .url-list {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            background: #f9f9f9;
+        }
+
+        .url-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .url-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .url-item input {
+            flex: 1;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-add {
+            width: 100%;
+            margin-top: 10px;
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-add:hover {
+            background: #218838;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .actions .btn {
+            flex: 1;
+        }
+
+        /* Toast 提示框 - 右侧悬浮 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            min-width: 300px;
+            max-width: 400px;
+            padding: 16px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: none;
+            z-index: 9999;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+        }
+
+        .toast.show {
+            display: block;
+        }
+
+        .toast.hide {
+            animation: slideOutRight 0.3s ease-out;
+        }
+
+        .toast-success {
+            background: #28a745;
+            color: white;
+            border-left: 4px solid #1e7e34;
+        }
+
+        .toast-error {
+            background: #dc3545;
+            color: white;
+            border-left: 4px solid #c82333;
+        }
+
+        .toast-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toast-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .toast-message {
+            flex: 1;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+
+        .status-bar {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .dns-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .dns-item {
+            flex: 1;
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 WireGuard 配置管理</h1>
+            <p>通过Web界面管理你的配置参数</p>
+        </div>
+
+        <div class="content">
+            <form id="configForm">
+                <!-- 订阅源配置 -->
+                <div class="form-group">
+                    <label>📡 订阅源地址</label>
+                    <div class="url-list" id="urlList">
+                        <!-- 动态添加 -->
+                    </div>
+                    <button type="button" class="btn btn-add" onclick="addUrlInput()">➕ 添加订阅源</button>
+                    <div class="help-text">添加一个或多个 Clash 配置订阅地址</div>
+                </div>
+
+                <!-- WireGuard 配置 -->
+                <div class="form-group">
+                    <label>🔌 WireGuard MTU</label>
+                    <input type="number" id="wgMtu" name="wgMtu" min="1" max="1500" required>
+                    <div class="help-text">MTU 值（1-1500）</div>
+                </div>
+
+                <div class="form-group">
+                    <label>🌐 DNS 服务器</label>
+                    <div class="dns-container">
+                        <div class="dns-item">
+                            <input type="text" id="dns1" placeholder="8.8.8.8">
+                        </div>
+                        <div class="dns-item">
+                            <input type="text" id="dns2" placeholder="1.1.1.1 (可选)">
+                        </div>
+                    </div>
+                    <div class="help-text">配置一个或多个DNS服务器</div>
+                </div>
+
+                <div class="form-group">
+                    <label>🏠 代理组名称</label>
+                    <input type="text" id="wgGroupName" name="wgGroupName" required>
+                    <div class="help-text">在 Clash 中显示的代理组名称（修改后会自动更新规则中的名称）</div>
+                </div>
+
+                <div class="form-group">
+                    <label>📋 路由规则</label>
+                    <textarea id="prependRules" name="prependRules" placeholder="每行一条规则，例如：&#10;IP-CIDR,192.168.0.0/16,🏠 Home&#10;DOMAIN-KEYWORD,local,🏠 Home"></textarea>
+                    <div class="help-text">每行一条规则，将添加到配置文件rules开头（代理组名称会自动同步）</div>
+                </div>
+
+                <div class="actions">
+                    <button type="button" class="btn btn-secondary" onclick="loadConfig()">🔄 重新加载</button>
+                    <button type="submit" class="btn btn-primary">💾 保存配置</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>服务运行中</span>
+            </div>
+            <div>
+                <a href="/health" target="_blank" style="color: #667eea; text-decoration: none;">查看服务状态 →</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示框 -->
+    <div id="toast" class="toast">
+        <div class="toast-content">
+            <div class="toast-icon" id="toastIcon"></div>
+            <div class="toast-message" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script>
+        // 存储上一次的代理组名称
+        let lastGroupName = '';
+
+        // 显示 Toast 提示消息
+        function showToast(message, type = 'success', callback) {
+            const toast = document.getElementById('toast');
+            const toastIcon = document.getElementById('toastIcon');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            // 设置图标
+            if (type === 'success') {
+                toastIcon.textContent = '✓';
+                toast.className = 'toast toast-success show';
+            } else {
+                toastIcon.textContent = '✕';
+                toast.className = 'toast toast-error show';
+            }
+            
+            // 设置消息
+            toastMessage.textContent = message;
+            
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                toast.classList.add('hide');
+                setTimeout(() => {
+                    toast.className = 'toast';
+                    // 如果有回调函数，执行它
+                    if (callback) {
+                        callback();
+                    }
+                }, 300); // 等待动画完成
+            }, 3000);
+        }
+
+        // 更新规则中的代理组名称
+        function updateRulesGroupName(oldName, newName) {
+            if (!oldName || !newName || oldName === newName) return;
+            
+            const rulesTextarea = document.getElementById('prependRules');
+            const rules = rulesTextarea.value;
+            
+            if (!rules) return;
+            
+            console.log('更新规则：', oldName, '->', newName);
+            
+            // 替换规则中的旧名称为新名称
+            // 规则格式：TYPE,VALUE,GROUP_NAME
+            // 找到最后一个逗号，替换之后的内容（不要 trim，保持原样）
+            const updatedRules = rules.split('\n').map(rule => {
+                if (!rule) return rule; // 空行保持原样
+                
+                // 找到最后一个逗号的位置
+                const lastCommaIndex = rule.lastIndexOf(',');
+                if (lastCommaIndex === -1) return rule;
+                
+                // 获取逗号后的代理组名称（不要 trim，保持原样）
+                const currentGroupName = rule.substring(lastCommaIndex + 1);
+                
+                // 如果匹配旧名称，则替换
+                if (currentGroupName === oldName) {
+                    const newRule = rule.substring(0, lastCommaIndex + 1) + newName;
+                    console.log('规则已更新:', rule, '->', newRule);
+                    return newRule;
+                }
+                
+                return rule;
+            }).join('\n');
+            
+            rulesTextarea.value = updatedRules;
+        }
+
+        // 添加订阅源输入框
+        function addUrlInput(value = '') {
+            const urlList = document.getElementById('urlList');
+            const urlItem = document.createElement('div');
+            urlItem.className = 'url-item';
+            urlItem.innerHTML = `
+                <input type="text" class="config-url" placeholder="https://example.com/config.yaml" value="${value}">
+                <button type="button" class="btn btn-danger" onclick="removeUrlInput(this)">✕</button>
+            `;
+            urlList.appendChild(urlItem);
+        }
+
+        // 删除订阅源输入框
+        function removeUrlInput(btn) {
+            btn.parentElement.remove();
+            // 确保至少有一个输入框
+            const urlList = document.getElementById('urlList');
+            if (urlList.children.length === 0) {
+                addUrlInput();
+            }
+        }
+
+        // 加载配置
+        async function loadConfig(showMessage = true) {
+            try {
+                const response = await fetch('/api/config');
+                if (!response.ok) throw new Error('加载配置失败');
+                
+                const config = await response.json();
+                
+                // 清空并重新填充订阅源
+                const urlList = document.getElementById('urlList');
+                urlList.innerHTML = '';
+                if (config.configUrls && config.configUrls.length > 0) {
+                    config.configUrls.forEach(url => addUrlInput(url));
+                } else {
+                    addUrlInput();
+                }
+                
+                // 填充其他字段
+                document.getElementById('wgMtu').value = config.wgMtu || 1340;
+                const groupName = config.wgGroupName || '🏠 Home';
+                document.getElementById('wgGroupName').value = groupName;
+                lastGroupName = groupName; // 保存当前代理组名称
+                
+                // DNS
+                const dns = config.wgDns || ['8.8.8.8'];
+                document.getElementById('dns1').value = dns[0] || '';
+                document.getElementById('dns2').value = dns[1] || '';
+                
+                // 规则
+                const rules = config.prependRules || [];
+                document.getElementById('prependRules').value = rules.join('\n');
+                
+                // 只在需要时显示提示
+                if (showMessage) {
+                    showToast('配置加载成功', 'success');
+                }
+            } catch (error) {
+                if (showMessage) {
+                    showToast('加载配置失败: ' + error.message, 'error');
+                }
+            }
+        }
+
+        // 保存配置
+        async function saveConfig(event) {
+            event.preventDefault();
+            
+            try {
+                // 收集订阅源
+                const configUrls = Array.from(document.querySelectorAll('.config-url'))
+                    .map(input => input.value.trim())
+                    .filter(url => url !== '');
+                
+                // 收集 DNS
+                const wgDns = [
+                    document.getElementById('dns1').value.trim(),
+                    document.getElementById('dns2').value.trim()
+                ].filter(dns => dns !== '');
+                
+                if (wgDns.length === 0) {
+                    throw new Error('至少需要配置一个DNS服务器');
+                }
+                
+                // 收集规则
+                const prependRules = document.getElementById('prependRules').value
+                    .split('\n')
+                    .map(rule => rule.trim())
+                    .filter(rule => rule !== '');
+                
+                const groupName = document.getElementById('wgGroupName').value; // 不要 trim
+                if (!groupName || groupName.trim() === '') { // 只检查是否为空
+                    throw new Error('代理组名称不能为空');
+                }
+                
+                const config = {
+                    configUrls: configUrls,
+                    wgMtu: parseInt(document.getElementById('wgMtu').value),
+                    wgDns: wgDns,
+                    wgGroupName: groupName,
+                    prependRules: prependRules
+                };
+                
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '保存失败');
+                }
+                
+                // 更新保存的代理组名称
+                lastGroupName = groupName;
+                
+                // 显示成功提示，toast 消失后刷新页面
+                showToast('配置保存成功！', 'success', function() {
+                    // Toast 消失后静默重新加载配置（不显示提示）
+                    loadConfig(false);
+                });
+            } catch (error) {
+                showToast('保存配置失败: ' + error.message, 'error');
+            }
+        }
+
+        // 监听代理组名称失去焦点
+        function setupGroupNameListener() {
+            const groupNameInput = document.getElementById('wgGroupName');
+            
+            // 只监听失去焦点事件
+            groupNameInput.addEventListener('blur', function() {
+                const newName = this.value; // 不要 trim，保持原样
+                
+                // 每次失去焦点都更新规则（不管是否有变化）
+                if (lastGroupName && newName) {
+                    console.log('失去焦点，更新规则:', lastGroupName, '->', newName);
+                    updateRulesGroupName(lastGroupName, newName);
+                    // 立即更新 lastGroupName，这样下次失去焦点时可以继续更新
+                    lastGroupName = newName;
+                }
+            });
+        }
+
+        // 初始化
+        document.getElementById('configForm').addEventListener('submit', saveConfig);
+        
+        // 页面加载时加载配置并设置监听器
+        window.addEventListener('load', function() {
+            loadConfig();
+            setupGroupNameListener();
+        });
+    </script>
+</body>
+</html>
+

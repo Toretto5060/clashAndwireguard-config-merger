@@ -12,6 +12,9 @@ RUN npm install --production
 # 复制应用代码
 COPY . .
 
+# 创建数据目录（用于存储配置文件）
+RUN mkdir -p /app/data
+
 # 暴露端口
 EXPOSE 3000
 

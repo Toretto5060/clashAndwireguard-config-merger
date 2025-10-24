@@ -3,26 +3,18 @@ const path = require('path');
 const yaml = require('js-yaml');
 const { loadAllWireGuardConfigs, convertToClashProxy } = require('./wireguard-parser');
 const { fetchAndMergeConfigs, appendWireGuardConfig } = require('./config-merger');
+const { loadConfig, saveConfig, validateConfig } = require('./config-manager');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// 从环境变量读取配置
-const CONFIG_URLS = process.env.CONFIG_URLS ? process.env.CONFIG_URLS.split(',') : [];
 const CONF_DIR = process.env.CONF_DIR || path.join(__dirname, 'conf');
-const WG_MTU = parseInt(process.env.WG_MTU || '1340');
-const WG_DNS = process.env.WG_DNS ? process.env.WG_DNS.split(',') : ['8.8.8.8'];
-const GROUP_NAME = process.env.WG_GROUP_NAME || '🏠 回家';
 
-// 规则配置（从环境变量读取或使用默认值）
-const DEFAULT_RULES = [
-  'IP-CIDR,192.168.5.0/24,🏠 回家',
-  'IP-CIDR,10.0.10.0/24,🏠 回家',
-  'DOMAIN-KEYWORD,lybaby,🏠 回家'
-];
-const PREPEND_RULES = process.env.PREPEND_RULES 
-  ? process.env.PREPEND_RULES.split(',') 
-  : DEFAULT_RULES;
+// 中间件
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// 从配置文件加载配置
+let appConfig = loadConfig();
 
 // 在启动时加载所有 WireGuard 配置
 let wireguardConfigs = {};
@@ -123,15 +115,55 @@ app.use((req, res, next) => {
   next();
 });
 
+// 配置管理API - 获取配置
+app.get('/api/config', (req, res) => {
+  res.json(appConfig);
+});
+
+// 配置管理API - 保存配置
+app.post('/api/config', (req, res) => {
+  try {
+    const newConfig = req.body;
+    
+    // 验证配置
+    const validation = validateConfig(newConfig);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: '配置验证失败',
+        details: validation.errors
+      });
+    }
+    
+    // 保存配置
+    if (saveConfig(newConfig)) {
+      appConfig = newConfig;
+      console.log('配置已更新');
+      res.json({
+        success: true,
+        message: '配置保存成功'
+      });
+    } else {
+      res.status(500).json({
+        error: '保存配置失败'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
+
 // 健康检查端点
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     configs: Object.keys(wireguardConfigs),
     configCount: Object.keys(wireguardConfigs).length,
-    configUrls: CONFIG_URLS,
-    mtu: WG_MTU,
-    dns: WG_DNS
+    configUrls: appConfig.configUrls,
+    mtu: appConfig.wgMtu,
+    dns: appConfig.wgDns,
+    groupName: appConfig.wgGroupName
   });
 });
 
@@ -139,6 +171,7 @@ app.get('/health', (req, res) => {
 app.post('/reload', (req, res) => {
   try {
     loadConfigs();
+    appConfig = loadConfig(); // 重新加载应用配置
     res.json({
       success: true,
       message: '配置已重新加载',
@@ -170,11 +203,11 @@ app.get('/:configName', async (req, res) => {
     
     // 从远程 URL 拉取并合并基础配置
     console.log('正在拉取基础配置...');
-    const { config: baseConfig, subscriptionInfo, allSubscriptionInfos } = await fetchAndMergeConfigs(CONFIG_URLS);
+    const { config: baseConfig, subscriptionInfo, allSubscriptionInfos } = await fetchAndMergeConfigs(appConfig.configUrls);
     
     // 将 WireGuard 配置转换为 Clash 格式
     const wgConfig = wireguardConfigs[configName];
-    const wgProxy = convertToClashProxy(wgConfig, 'WireGuard', WG_MTU, WG_DNS);
+    const wgProxy = convertToClashProxy(wgConfig, 'WireGuard', appConfig.wgMtu, appConfig.wgDns);
     
     console.log(`WireGuard 代理配置:`, JSON.stringify(wgProxy, null, 2));
     
@@ -182,8 +215,8 @@ app.get('/:configName', async (req, res) => {
     let finalConfig = appendWireGuardConfig(
       baseConfig,
       wgProxy,
-      GROUP_NAME,
-      PREPEND_RULES
+      appConfig.wgGroupName,
+      appConfig.prependRules
     );
     
     // 重新排序配置，确保基础配置在前
@@ -228,25 +261,33 @@ app.get('/:configName', async (req, res) => {
   }
 });
 
-// 列出所有可用配置
+// 根路径重定向到配置页面
 app.get('/', (req, res) => {
-  res.json({
-    message: 'WireGuard 配置合并服务',
-    usage: '访问 /:configName 获取对应的配置',
-    available_configs: Object.keys(wireguardConfigs),
-    endpoints: {
-      health: '/health',
-      reload: '/reload (POST)',
-      config: '/:configName'
-    },
-    environment: {
-      config_urls: CONFIG_URLS,
-      conf_dir: CONF_DIR,
-      mtu: WG_MTU,
-      dns: WG_DNS,
-      group_name: GROUP_NAME
-    }
-  });
+  // 如果是API请求，返回JSON
+  if (req.headers.accept && req.headers.accept.includes('application/json')) {
+    return res.json({
+      message: 'WireGuard 配置合并服务',
+      usage: '访问 /:configName 获取对应的配置',
+      available_configs: Object.keys(wireguardConfigs),
+      endpoints: {
+        webui: '/ (Web界面)',
+        health: '/health',
+        reload: '/reload (POST)',
+        configApi: '/api/config (GET/POST)',
+        config: '/:configName'
+      },
+      config: {
+        config_urls: appConfig.configUrls,
+        conf_dir: CONF_DIR,
+        mtu: appConfig.wgMtu,
+        dns: appConfig.wgDns,
+        group_name: appConfig.wgGroupName
+      }
+    });
+  }
+  
+  // 默认返回HTML配置页面
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // 启动服务器
@@ -255,12 +296,13 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`✓ 服务器已启动`);
   console.log(`✓ 监听端口: ${PORT}`);
   console.log(`✓ 可用配置: ${Object.keys(wireguardConfigs).length} 个`);
-  console.log('\n环境变量配置:');
-  console.log(`  - CONFIG_URLS: ${CONFIG_URLS.length > 0 ? CONFIG_URLS.join(', ') : '未配置'}`);
+  console.log(`✓ Web管理界面: http://localhost:${PORT}`);
+  console.log('\n当前配置:');
+  console.log(`  - 订阅源: ${appConfig.configUrls.length > 0 ? appConfig.configUrls.length + ' 个' : '未配置'}`);
   console.log(`  - CONF_DIR: ${CONF_DIR}`);
-  console.log(`  - WG_MTU: ${WG_MTU}`);
-  console.log(`  - WG_DNS: ${WG_DNS.join(', ')}`);
-  console.log(`  - WG_GROUP_NAME: ${GROUP_NAME}`);
+  console.log(`  - WG_MTU: ${appConfig.wgMtu}`);
+  console.log(`  - WG_DNS: ${appConfig.wgDns.join(', ')}`);
+  console.log(`  - WG_GROUP_NAME: ${appConfig.wgGroupName}`);
   console.log('========================================\n');
 });
 
