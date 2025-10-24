@@ -10,6 +10,9 @@ services:
       - PORT=3000
       - CONF_DIR=/app/conf
       - CONFIG_FILE=/app/data/config.json
+      - TOKEN_FILE=/app/data/tokens.json
+      - WEB_USERNAME=admin
+      - WEB_PASSWORD=admin123
     volumes:
       - ./conf:/app/conf:ro
       - ./data:/app/data

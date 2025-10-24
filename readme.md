@@ -4,14 +4,21 @@
 
 ## 🌟 功能特性
 
-- ✅ **Web 管理界面** - 通过浏览器配置所有参数，无需修改环境变量
+- ✅ **登录认证保护** - Web界面需要登录访问，支持IP锁定防暴力破解
+- ✅ **现代化 Web 管理界面** - 左右分栏布局，完美适配移动端
+- ✅ **订阅源脱敏保护** - 自动隐藏订阅源地址中间部分，支持一键查看/隐藏
+- ✅ **订阅源Token管理** - 安全的订阅链接生成和管理机制
+- ✅ **自动清理机制** - 配置文件删除时，自动失效对应的订阅token
+- ✅ **智能容错机制** - 订阅失效时返回空配置，保护现有配置继续可用
 - ✅ 从多个 URL 拉取并合并 Clash 配置
 - ✅ 自动解析 WireGuard 配置文件（`.conf` 格式）
 - ✅ 将 WireGuard 配置转换为 Clash 格式
-- ✅ 支持多个 WireGuard 配置文件，通过路径名访问
+- ✅ 支持多个 WireGuard 配置文件
 - ✅ 支持 YAML 和 JSON 输出格式
 - ✅ 自动提取和显示订阅信息（流量、到期时间）
 - ✅ 配置持久化存储
+- ✅ 响应式设计，完美支持桌面和移动设备
+- ✅ 移动端优化布局，转订阅源管理在上方
 
 ## 📁 目录结构
 
@@ -96,6 +103,16 @@ docker-compose up -d
 
 浏览器打开：`http://localhost:3000`
 
+**首次登录：**
+- 默认用户名：`admin`
+- 默认密码：`admin123`
+- ⚠️ **强烈建议修改默认密码**（通过环境变量 `WEB_USERNAME` 和 `WEB_PASSWORD`）
+
+**安全特性：**
+- 3小时内登录失败10次，自动锁定IP
+- Session有效期24小时
+- 锁定期间登录按钮禁用
+
 在 Web 界面中配置：
 - 📡 订阅源地址
 - 🔌 WireGuard MTU
@@ -107,31 +124,121 @@ docker-compose up -d
 
 ## 📖 使用方法
 
+### 登录认证
+
+首次访问 `http://localhost:3000` 会自动跳转到登录页面。
+
+**登录功能：**
+- 🔐 需要输入用户名和密码
+- 🛡️ 防暴力破解：3小时内失败10次自动锁定IP
+- ⏰ Session有效期24小时
+- 📊 实时显示剩余尝试次数
+- 🔒 锁定状态下登录按钮自动禁用
+
+**IP锁定机制：**
+```
+尝试次数统计：滚动3小时窗口
+锁定条件：10次失败尝试
+锁定时长：3小时
+锁定效果：无法登录，显示剩余锁定时间
+解锁方式：自动解锁（3小时后）
+```
+
 ### Web 管理界面
 
-访问 `http://localhost:3000` 进入配置管理页面：
+登录成功后进入配置管理页面。
 
-![Web 界面](https://via.placeholder.com/800x450?text=Web+Config+Interface)
+**界面布局：**
 
-**功能说明：**
-- **订阅源管理**：添加/删除多个 Clash 订阅地址
-- **参数配置**：MTU、DNS、代理组名称等
-- **规则配置**：自定义路由规则
-- **实时保存**：点击保存后立即生效
-
-### 获取配置
-
-访问 `http://localhost:3000/<配置名称>` 即可获取合并后的配置文件。
-
-例如，如果你有 `conf/my_config.conf` 文件，访问：
-
-```bash
-# 获取 YAML 格式（默认）
-curl http://localhost:3000/my_config
-
-# 获取 JSON 格式
-curl -H "Accept: application/json" http://localhost:3000/my_config
+**桌面端布局：**
 ```
+┌─────────────────────────────────────────────────────┐
+│              🔐 WireGuard 配置管理中心               │
+├──────────────────────┬──────────────────────────────┤
+│   ⚙️ 订阅配置        │    🔗 转订阅源管理           │
+├──────────────────────┼──────────────────────────────┤
+│ • 订阅源地址         │ • 选择配置文件               │
+│ • WireGuard MTU      │ • 生成订阅链接               │
+│ • WireGuard DNS      │ • 已生成的订阅列表           │
+│ • 代理组名称         │   - 复制链接                 │
+│ • 路由规则           │   - 失效管理                 │
+│                      │   - 使用统计                 │
+│ [💾 保存] [🔄 重载]  │ [✨ 生成订阅链接]            │
+└──────────────────────┴──────────────────────────────┘
+```
+
+**移动端布局：**
+```
+┌─────────────────────────────────────┐
+│   🔐 WireGuard 配置管理中心          │
+├─────────────────────────────────────┤
+│   🔗 转订阅源管理                    │
+│   • 选择配置文件                     │
+│   • 生成订阅链接                     │
+│   • 已生成的订阅列表                 │
+├─────────────────────────────────────┤
+│   ⚙️ 订阅配置                        │
+│   • 订阅源地址                       │
+│   • WireGuard MTU / DNS              │
+│   • 代理组名称 / 路由规则            │
+└─────────────────────────────────────┘
+```
+
+**左侧/下方 - 订阅配置：**
+- 📡 **订阅源地址**：添加/删除多个 Clash 订阅源
+  - 🔒 自动脱敏显示：保存后自动隐藏中间部分（如：`https://examp******nfig`）
+  - 👁️ 显示/隐藏切换：点击小眼睛图标查看完整地址
+  - ✏️ 编辑功能：显示完整地址后可直接编辑
+- 🔌 **WireGuard MTU**：配置 MTU 值（1280-1420）
+- 🌐 **DNS 服务器**：主 DNS 和备用 DNS
+- 🏠 **代理组名称**：自定义代理组显示名称
+- 📋 **路由规则**：自定义路由规则，每行一条
+
+**右侧/上方 - 转订阅源管理：**
+- 🔗 **生成订阅链接**：为指定配置文件生成安全的订阅Token
+- 📊 **订阅列表**：查看所有已生成的订阅链接
+  - 智能排序：有效订阅在上，失效订阅在下，同状态按创建时间排序
+  - 状态标识：有效（绿色✓）、失效（红色✗，虚线边框，半透明）
+  - 创建时间、使用次数、最后使用时间
+  - 复制链接、失效订阅操作
+- 🧹 **自动清理**：配置文件删除时，系统自动失效对应的订阅token
+
+**响应式设计：**
+- 📱 **移动端**：上下布局，转订阅源管理在上方，方便快速访问
+- 💻 **桌面端**：左右分栏布局，操作更便捷，无滚动条
+- 🎨 **界面优化**：
+  - 紧凑型顶部标题，节省屏幕空间
+  - 固定高度布局，避免全屏滚动
+  - 更多空间留给配置和管理面板
+
+### 生成订阅链接
+
+1. 在右侧下拉框选择 WireGuard 配置文件
+2. 点击 **✨ 生成订阅链接** 按钮
+3. 复制生成的订阅URL，添加到 Clash 客户端
+
+**订阅链接格式：**
+```
+http://localhost:3000/config/<配置名称>/<token>
+```
+
+例如：
+```
+http://localhost:3000/config/my_config/5df68e81
+https://yourdomain.com:3000/config/home_server/abc123de
+```
+
+### 订阅链接特性
+
+✅ **安全性**：每个配置只能生成一个有效token，需要先失效才能重新生成  
+✅ **可追踪**：记录每个订阅的使用次数和最后使用时间  
+✅ **容错性**：token失效后返回空配置模板，保护客户端已缓存的配置继续可用  
+✅ **易管理**：支持一键复制链接和失效操作  
+✅ **状态可视化**：
+  - 有效订阅：绿色标签 "✓ 有效"
+  - 失效订阅：红色标签 "✗ 已失效" + 虚线红框 + 半透明显示 + 删除线配置名
+✅ **智能排序**：有效订阅在上方，失效订阅在下方，同状态按创建时间降序（新的在前）  
+✅ **自动清理**：删除 WireGuard 配置文件时，系统自动失效对应的订阅token（每10分钟检查一次）
 
 **输出示例：**
 ```yaml
@@ -160,16 +267,28 @@ proxies:
 
 ### 1. Web 管理界面 - `GET /`
 
-访问配置管理页面。
+访问配置管理页面（浏览器访问）。
 
-### 2. 获取配置 - `GET /:configName`
+### 2. 订阅配置 - `GET /config/:configName/:token`
 
-根据配置名称返回合并后的 Clash 配置。
+通过token获取合并后的 Clash 配置文件。
+
+**参数：**
+- `configName`：WireGuard 配置文件名（不含 .conf 扩展名）
+- `token`：通过 Web 界面生成的订阅token
 
 **示例：**
 ```bash
-curl http://localhost:3000/my_config
+curl http://localhost:3000/config/my_config/5df68e81
 ```
+
+**响应：**
+- ✅ Token有效：返回完整的合并配置（YAML格式）
+- ⚠️ Token失效：返回空配置模板 + 说明注释（客户端缓存的配置仍可用）
+- ⚠️ 配置不存在：返回空配置模板 + 错误说明
+
+**容错机制：**
+即使订阅源失效或出错，也会返回 200 状态码和空配置模板，不会影响 Clash 客户端的现有配置。
 
 ### 3. 健康检查 - `GET /health`
 
@@ -184,6 +303,7 @@ curl http://localhost:3000/health
 ```json
 {
   "status": "ok",
+  "available_configs": ["my_config", "home_server"],
   "configs": ["my_config", "home_server"],
   "configCount": 2,
   "configUrls": ["https://example.com/config.yaml"],
@@ -218,7 +338,66 @@ curl -X POST http://localhost:3000/api/config \
   }'
 ```
 
-### 5. 重新加载 - `POST /reload`
+### 5. Token管理 API
+
+#### 创建Token - `POST /api/tokens`
+
+为指定配置文件生成订阅token。
+
+**请求体：**
+```bash
+curl -X POST http://localhost:3000/api/tokens \
+  -H "Content-Type: application/json" \
+  -d '{"configName": "my_config"}'
+```
+
+**响应：**
+```json
+{
+  "success": true,
+  "token": "5df68e81",
+  "configName": "my_config",
+  "subscriptionUrl": "http://localhost:3000/config/my_config/5df68e81",
+  "createdAt": 1698123456789
+}
+```
+
+**注意：** 每个配置只能有一个有效token，需要先失效旧token才能生成新的。
+
+#### 获取所有Token - `GET /api/tokens`
+
+获取所有已生成的订阅token列表。
+
+**示例：**
+```bash
+curl http://localhost:3000/api/tokens
+```
+
+**响应：**
+```json
+[
+  {
+    "token": "5df68e81",
+    "configName": "my_config",
+    "active": true,
+    "createdAt": 1698123456789,
+    "lastUsed": 1698234567890,
+    "usageCount": 25,
+    "subscriptionUrl": "http://localhost:3000/config/my_config/5df68e81"
+  }
+]
+```
+
+#### 失效Token - `DELETE /api/tokens/:token`
+
+使指定token失效。
+
+**示例：**
+```bash
+curl -X DELETE http://localhost:3000/api/tokens/5df68e81
+```
+
+### 6. 重新加载 - `POST /reload`
 
 重新加载 WireGuard 配置文件和应用配置。
 
@@ -234,8 +413,32 @@ curl -X POST http://localhost:3000/reload
 | `PORT` | 服务监听端口 | `3000` |
 | `CONF_DIR` | WireGuard 配置目录 | `/app/conf` |
 | `CONFIG_FILE` | 配置文件存储路径 | `/app/data/config.json` |
+| `TOKEN_FILE` | Token数据存储路径 | `/app/data/tokens.json` |
+| `WEB_USERNAME` | Web登录用户名 | `admin` |
+| `WEB_PASSWORD` | Web登录密码 | `admin123` |
 
 **注意：** 订阅源、MTU、DNS 等参数现在通过 Web 界面配置，不再使用环境变量。
+
+**安全建议：**
+⚠️ **请务必修改默认的登录用户名和密码！**
+
+修改方式：
+1. 修改 `docker-compose.yml` 中的环境变量
+2. 或通过 `docker run` 命令传递环境变量
+
+```bash
+docker run -d \
+  -e WEB_USERNAME=your_username \
+  -e WEB_PASSWORD=your_strong_password \
+  ...
+```
+
+**数据持久化：**
+- `data/config.json` - 存储应用配置（订阅源、WireGuard参数、路由规则）
+- `data/tokens.json` - 存储订阅token信息（token、使用统计等）
+- `data/login-attempts.json` - 存储登录尝试记录（用于IP锁定）
+
+三个文件都会在容器重启后保持不变（通过 volume 挂载）。
 
 ## 📋 配置说明
 

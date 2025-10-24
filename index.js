@@ -4,10 +4,54 @@ const yaml = require('js-yaml');
 const { loadAllWireGuardConfigs, convertToClashProxy } = require('./wireguard-parser');
 const { fetchAndMergeConfigs, appendWireGuardConfig } = require('./config-merger');
 const { loadConfig, saveConfig, validateConfig } = require('./config-manager');
+const { createToken, validateToken, revokeToken, getTokenByConfig, getAllTokens } = require('./token-manager');
+const { 
+  isIPLocked, 
+  recordLoginFailure, 
+  clearLoginAttempts, 
+  generateSessionToken, 
+  verifyCredentials,
+  formatRemainingTime 
+} = require('./auth-manager');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const CONF_DIR = process.env.CONF_DIR || path.join(__dirname, 'conf');
+
+// Session存储（内存中）
+const sessions = new Map();
+
+// 获取客户端IP地址
+function getClientIP(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0].trim() || 
+         req.headers['x-real-ip'] || 
+         req.connection.remoteAddress || 
+         req.socket.remoteAddress;
+}
+
+// 认证中间件
+function requireAuth(req, res, next) {
+  const token = req.headers['authorization']?.replace('Bearer ', '') || 
+                req.query.token;
+  
+  if (!token || !sessions.has(token)) {
+    return res.status(401).json({ error: 'Unauthorized', message: '请先登录' });
+  }
+  
+  const session = sessions.get(token);
+  const now = Date.now();
+  
+  // Session有效期24小时
+  if (now - session.createdAt > 24 * 60 * 60 * 1000) {
+    sessions.delete(token);
+    return res.status(401).json({ error: 'Unauthorized', message: '登录已过期，请重新登录' });
+  }
+  
+  // 更新最后活动时间
+  session.lastActivity = now;
+  
+  next();
+}
 
 // 中间件
 app.use(express.json());
@@ -42,6 +86,31 @@ function reorderConfigKeys(config) {
   });
   
   return ordered;
+}
+
+/**
+ * 生成空的配置模板
+ */
+function generateEmptyConfigTemplate() {
+  return {
+    port: 7890,
+    'socks-port': 7891,
+    'allow-lan': false,
+    mode: 'rule',
+    'log-level': 'info',
+    'external-controller': '127.0.0.1:9090',
+    proxies: [],
+    'proxy-groups': [
+      {
+        name: '🚀 订阅已过期',
+        type: 'select',
+        proxies: ['DIRECT']
+      }
+    ],
+    rules: [
+      'MATCH,🚀 订阅已过期'
+    ]
+  };
 }
 
 /**
@@ -101,6 +170,23 @@ function loadConfigs() {
   console.log(`已加载 ${Object.keys(wireguardConfigs).length} 个 WireGuard 配置`);
   console.log('配置列表:', Object.keys(wireguardConfigs).join(', '));
   console.log('========================================\n');
+  
+  // 检查并失效不存在配置的订阅token
+  const availableConfigs = Object.keys(wireguardConfigs);
+  const allTokens = getAllTokens();
+  let revokedCount = 0;
+  
+  allTokens.forEach(token => {
+    if (!availableConfigs.includes(token.configName)) {
+      console.log(`⚠️ 配置 "${token.configName}" 不存在，自动失效token: ${token.token}`);
+      revokeToken(token.token);
+      revokedCount++;
+    }
+  });
+  
+  if (revokedCount > 0) {
+    console.log(`✓ 已自动失效 ${revokedCount} 个无效订阅\n`);
+  }
 }
 
 // 初始加载配置
@@ -115,13 +201,132 @@ app.use((req, res, next) => {
   next();
 });
 
+// ==================== 认证API ====================
+
+// 检查IP锁定状态
+app.get('/api/auth/status', (req, res) => {
+  const ip = getClientIP(req);
+  const lockStatus = isIPLocked(ip);
+  
+  if (lockStatus.locked) {
+    const remainingTime = formatRemainingTime(lockStatus.remainingTime);
+    return res.json({
+      locked: true,
+      remainingTime,
+      attempts: 10
+    });
+  }
+  
+  // 获取当前失败次数（从文件读取）
+  const fs = require('fs');
+  const attemptsFile = path.join(__dirname, 'data', 'login-attempts.json');
+  let attempts = 0;
+  
+  try {
+    if (fs.existsSync(attemptsFile)) {
+      const data = JSON.parse(fs.readFileSync(attemptsFile, 'utf-8'));
+      if (data[ip]) {
+        attempts = data[ip].failedCount || 0;
+      }
+    }
+  } catch (error) {
+    // 忽略错误
+  }
+  
+  res.json({
+    locked: false,
+    attempts
+  });
+});
+
+// 登录API
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  const ip = getClientIP(req);
+  
+  console.log(`登录尝试 - IP: ${ip}, 用户名: ${username}`);
+  
+  // 检查IP是否被锁定
+  const lockStatus = isIPLocked(ip);
+  if (lockStatus.locked) {
+    const remainingTime = formatRemainingTime(lockStatus.remainingTime);
+    console.log(`登录拒绝 - IP ${ip} 已被锁定，剩余时间: ${remainingTime}`);
+    return res.status(429).json({
+      error: 'IP已被锁定',
+      locked: true,
+      remainingTime
+    });
+  }
+  
+  // 验证用户名和密码
+  if (verifyCredentials(username, password)) {
+    // 登录成功
+    const token = generateSessionToken();
+    sessions.set(token, {
+      ip,
+      username,
+      createdAt: Date.now(),
+      lastActivity: Date.now()
+    });
+    
+    // 清除该IP的登录失败记录
+    clearLoginAttempts(ip);
+    
+    console.log(`✓ 登录成功 - IP: ${ip}, 用户名: ${username}`);
+    
+    return res.json({
+      success: true,
+      token,
+      message: '登录成功'
+    });
+  } else {
+    // 登录失败
+    const ipData = recordLoginFailure(ip);
+    const remaining = 10 - ipData.failedCount;
+    
+    console.log(`✗ 登录失败 - IP: ${ip}, 剩余尝试次数: ${remaining}`);
+    
+    // 检查是否达到锁定阈值
+    if (ipData.failedCount >= 10) {
+      const lockStatus = isIPLocked(ip);
+      const remainingTime = formatRemainingTime(lockStatus.remainingTime);
+      
+      return res.status(429).json({
+        error: '登录失败次数过多，IP已被锁定',
+        locked: true,
+        remainingTime,
+        attempts: 10
+      });
+    }
+    
+    return res.status(401).json({
+      error: '用户名或密码错误',
+      attempts: ipData.failedCount
+    });
+  }
+});
+
+// 登出API
+app.post('/api/auth/logout', (req, res) => {
+  const token = req.headers['authorization']?.replace('Bearer ', '');
+  
+  if (token && sessions.has(token)) {
+    sessions.delete(token);
+    console.log('用户登出');
+  }
+  
+  res.json({ success: true, message: '登出成功' });
+});
+
+// ==================== 配置管理API ====================
+
 // 配置管理API - 获取配置
-app.get('/api/config', (req, res) => {
+app.get('/api/config', requireAuth, (req, res) => {
   res.json(appConfig);
 });
 
 // 配置管理API - 保存配置
-app.post('/api/config', (req, res) => {
+app.post('/api/config', requireAuth, (req, res) => {
   try {
     const newConfig = req.body;
     
@@ -158,7 +363,8 @@ app.post('/api/config', (req, res) => {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    configs: Object.keys(wireguardConfigs),
+    available_configs: Object.keys(wireguardConfigs),
+    configs: Object.keys(wireguardConfigs), // 保留旧字段以兼容
     configCount: Object.keys(wireguardConfigs).length,
     configUrls: appConfig.configUrls,
     mtu: appConfig.wgMtu,
@@ -168,7 +374,7 @@ app.get('/health', (req, res) => {
 });
 
 // 重新加载配置端点
-app.post('/reload', (req, res) => {
+app.post('/reload', requireAuth, (req, res) => {
   try {
     loadConfigs();
     appConfig = loadConfig(); // 重新加载应用配置
@@ -185,31 +391,154 @@ app.post('/reload', (req, res) => {
   }
 });
 
-// 主要配置端点
-app.get('/:configName', async (req, res) => {
+// Token管理API - 创建token
+app.post('/api/tokens', requireAuth, (req, res) => {
   try {
-    const configName = req.params.configName;
+    const { configName } = req.body;
     
-    console.log(`\n请求配置: ${configName}`);
+    if (!configName) {
+      return res.status(400).json({ error: '配置名称不能为空' });
+    }
     
     // 检查配置是否存在
     if (!wireguardConfigs[configName]) {
-      console.error(`配置不存在: ${configName}`);
-      return res.status(404).json({
-        error: '配置不存在',
-        available: Object.keys(wireguardConfigs)
+      return res.status(404).json({ error: '配置不存在' });
+    }
+    
+    const tokenObj = createToken(configName);
+    
+    if (!tokenObj) {
+      return res.status(409).json({ 
+        error: '该配置已有有效的订阅源',
+        message: '请先失效现有订阅源后再创建新的'
       });
     }
     
+    // 生成完整的订阅URL（新格式包含配置名称）
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const subscriptionUrl = `${protocol}://${host}/config/${configName}/${tokenObj.token}`;
+    
+    res.json({
+      success: true,
+      token: tokenObj.token,
+      configName: tokenObj.configName,
+      subscriptionUrl: subscriptionUrl,
+      createdAt: tokenObj.createdAt
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Token管理API - 获取所有token
+app.get('/api/tokens', requireAuth, (req, res) => {
+  try {
+    const tokens = getAllTokens();
+    
+    // 生成完整的订阅URL（新格式包含配置名称）
+    const protocol = req.protocol;
+    const host = req.get('host');
+    
+    const tokensWithUrl = tokens.map(t => ({
+      ...t,
+      subscriptionUrl: `${protocol}://${host}/config/${t.configName}/${t.token}`
+    }));
+    
+    res.json(tokensWithUrl);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Token管理API - 失效token
+app.delete('/api/tokens/:token', requireAuth, (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const success = revokeToken(token);
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Token已失效'
+      });
+    } else {
+      res.status(404).json({
+        error: 'Token不存在'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 订阅端点 - 通过token获取配置（新格式包含配置名称）
+app.get('/config/:configName/:token', async (req, res) => {
+  try {
+    const { configName, token } = req.params;
+    
+    // 验证token
+    const tokenObj = validateToken(token);
+    
+    // Token失效或不存在时，返回空配置模板（而不是401错误）
+    // 这样可以确保即使订阅源失效，客户端仍然可以使用之前的配置
+    if (!tokenObj) {
+      console.log(`⚠️ Token失效或不存在 [${token}]: ${configName}，返回空配置模板`);
+      
+      const emptyConfig = generateEmptyConfigTemplate();
+      const yamlConfig = yaml.dump(emptyConfig, {
+        lineWidth: -1,
+        noRefs: true,
+        sortKeys: false
+      });
+      
+      // 添加注释说明
+      const comment = `# ⚠️ 订阅源已失效或不存在\n# 这是一个空的配置模板，请重新生成订阅链接\n# 您之前的配置已缓存，可以继续使用\n\n`;
+      
+      return res.type('text/yaml').send(comment + yamlConfig);
+    }
+    
+    // 验证token对应的配置名称是否匹配URL中的配置名称
+    if (tokenObj.configName !== configName) {
+      console.log(`⚠️ Token配置不匹配 [${token}]: URL=${configName}, Token=${tokenObj.configName}，返回空配置模板`);
+      
+      const emptyConfig = generateEmptyConfigTemplate();
+      const yamlConfig = yaml.dump(emptyConfig, {
+        lineWidth: -1,
+        noRefs: true,
+        sortKeys: false
+      });
+      
+      const comment = `# ⚠️ 订阅链接配置不匹配\n# 请使用正确的订阅链接\n\n`;
+      
+      return res.type('text/yaml').send(comment + yamlConfig);
+    }
+    
+    // 检查配置文件是否存在
+    if (!wireguardConfigs[configName]) {
+      console.log(`⚠️ 配置文件不存在 [${configName}]，返回空配置模板`);
+      
+      const emptyConfig = generateEmptyConfigTemplate();
+      const yamlConfig = yaml.dump(emptyConfig, {
+        lineWidth: -1,
+        noRefs: true,
+        sortKeys: false
+      });
+      
+      const comment = `# ⚠️ 配置文件不存在: ${configName}\n# 请确认配置文件是否已正确放置在 conf 目录\n\n`;
+      
+      return res.type('text/yaml').send(comment + yamlConfig);
+    }
+    
+    console.log(`\n✓ 订阅请求 [${token}]: ${configName}`);
+    
     // 从远程 URL 拉取并合并基础配置
-    console.log('正在拉取基础配置...');
     const { config: baseConfig, subscriptionInfo, allSubscriptionInfos } = await fetchAndMergeConfigs(appConfig.configUrls);
     
     // 将 WireGuard 配置转换为 Clash 格式
     const wgConfig = wireguardConfigs[configName];
     const wgProxy = convertToClashProxy(wgConfig, 'WireGuard', appConfig.wgMtu, appConfig.wgDns);
-    
-    console.log(`WireGuard 代理配置:`, JSON.stringify(wgProxy, null, 2));
     
     // 追加 WireGuard 配置
     let finalConfig = appendWireGuardConfig(
@@ -225,39 +554,39 @@ app.get('/:configName', async (req, res) => {
     // 设置订阅信息响应头（使用第一个订阅源）
     if (subscriptionInfo) {
       res.set('Subscription-Userinfo', formatSubscriptionHeader(subscriptionInfo));
-      console.log('第一个订阅源信息:', subscriptionInfo);
     }
     
-    // 根据 Accept 头返回相应格式
-    const acceptHeader = req.get('Accept') || '';
+    // 返回 YAML 格式
+    let yamlConfig = yaml.dump(finalConfig, {
+      lineWidth: -1,
+      noRefs: true,
+      sortKeys: false
+    });
     
-    if (acceptHeader.includes('application/json')) {
-      res.json(finalConfig);
-    } else {
-      // 默认返回 YAML，添加所有订阅源信息注释
-      let yamlConfig = yaml.dump(finalConfig, {
-        lineWidth: -1,
-        noRefs: true,
-        sortKeys: false
-      });
-      
-      // 在 YAML 开头添加所有订阅源信息注释
-      if (allSubscriptionInfos.length > 0) {
-        const infoComment = generateAllSubscriptionComment(allSubscriptionInfos);
-        yamlConfig = infoComment + yamlConfig;
-      }
-      
-      res.type('text/yaml').send(yamlConfig);
+    // 在 YAML 开头添加所有订阅源信息注释
+    if (allSubscriptionInfos.length > 0) {
+      const infoComment = generateAllSubscriptionComment(allSubscriptionInfos);
+      yamlConfig = infoComment + yamlConfig;
     }
     
-    console.log(`✓ 成功返回配置: ${configName}\n`);
+    res.type('text/yaml').send(yamlConfig);
+    
+    console.log(`✓ 订阅成功: ${configName} (${token})\n`);
     
   } catch (error) {
-    console.error('处理请求时出错:', error);
-    res.status(500).json({
-      error: '处理请求时出错',
-      message: error.message
+    console.error('❌ 处理订阅请求时出错:', error);
+    
+    // 即使出错也返回空配置模板，确保客户端可以继续使用
+    const emptyConfig = generateEmptyConfigTemplate();
+    const yamlConfig = yaml.dump(emptyConfig, {
+      lineWidth: -1,
+      noRefs: true,
+      sortKeys: false
     });
+    
+    const comment = `# ⚠️ 服务器错误: ${error.message}\n# 返回空配置模板，您之前的配置已缓存，可以继续使用\n\n`;
+    
+    res.type('text/yaml').send(comment + yamlConfig);
   }
 });
 
@@ -267,14 +596,15 @@ app.get('/', (req, res) => {
   if (req.headers.accept && req.headers.accept.includes('application/json')) {
     return res.json({
       message: 'WireGuard 配置合并服务',
-      usage: '访问 /:configName 获取对应的配置',
+      usage: '通过Web界面生成订阅token，然后访问 /config/:configName/:token 获取配置',
       available_configs: Object.keys(wireguardConfigs),
       endpoints: {
         webui: '/ (Web界面)',
         health: '/health',
         reload: '/reload (POST)',
         configApi: '/api/config (GET/POST)',
-        config: '/:configName'
+        tokenManagement: '/api/tokens (GET/POST/DELETE)',
+        subscription: '/config/:configName/:token (订阅端点)'
       },
       config: {
         config_urls: appConfig.configUrls,

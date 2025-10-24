@@ -6,5 +6,7 @@ npm-debug.log
 conf/*.conf
 !conf/.gitkeep
 data/config.json
+data/tokens.json
+data/login-attempts.json
 !data/.gitkeep
 

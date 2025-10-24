@@ -18,34 +18,65 @@
             padding: 20px;
         }
 
-        .container {
-            max-width: 800px;
+        .main-container {
+            max-width: 1400px;
             margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            padding: 15px 20px;
             text-align: center;
+            margin-bottom: 15px;
         }
 
         .header h1 {
-            font-size: 28px;
-            margin-bottom: 10px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 5px;
         }
 
         .header p {
-            opacity: 0.9;
-            font-size: 14px;
+            color: #666;
+            font-size: 12px;
         }
 
-        .content {
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: calc(100vh - 140px);
+        }
+
+        .panel {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            font-size: 18px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .panel-content {
             padding: 30px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
         }
 
         .form-group {
@@ -68,7 +99,8 @@
 
         input[type="text"],
         input[type="number"],
-        textarea {
+        textarea,
+        select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -79,7 +111,8 @@
 
         input[type="text"]:focus,
         input[type="number"]:focus,
-        textarea:focus {
+        textarea:focus,
+        select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -101,14 +134,50 @@
             display: flex;
             gap: 10px;
             margin-bottom: 10px;
+            align-items: center;
         }
 
         .url-item:last-child {
             margin-bottom: 0;
         }
 
+        .url-input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
         .url-item input {
             flex: 1;
+            padding-right: 40px;
+        }
+
+        .url-item input.masked {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+
+        .btn-eye {
+            position: absolute;
+            right: 10px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .btn-eye:hover {
+            opacity: 1;
+        }
+
+        .dns-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
         }
 
         .btn {
@@ -121,12 +190,17 @@
             transition: all 0.3s;
         }
 
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
@@ -136,464 +210,826 @@
             color: white;
         }
 
-        .btn-secondary:hover {
+        .btn-secondary:hover:not(:disabled) {
             background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #218838;
         }
 
         .btn-danger {
             background: #dc3545;
             color: white;
+            padding: 6px 12px;
+            font-size: 12px;
         }
 
-        .btn-danger:hover {
+        .btn-danger:hover:not(:disabled) {
             background: #c82333;
         }
 
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
         .btn-add {
-            width: 100%;
-            margin-top: 10px;
             background: #28a745;
             color: white;
+            margin-top: 10px;
         }
 
         .btn-add:hover {
             background: #218838;
         }
 
-        .actions {
+        .button-group {
             display: flex;
-            gap: 15px;
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid #e0e0e0;
+            gap: 10px;
+            margin-top: 20px;
         }
 
-        .actions .btn {
+        .button-group .btn {
             flex: 1;
         }
 
-        /* Toast 提示框 - 右侧悬浮 */
+        .subscription-item {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .subscription-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .subscription-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .subscription-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .subscription-item.inactive {
+            opacity: 0.6;
+            border: 2px dashed #dc3545 !important;
+            background: #fff5f5 !important;
+        }
+
+        .subscription-item.inactive .subscription-name {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        .subscription-url {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin: 10px 0;
+            border: 1px solid #dee2e6;
+        }
+
+        .subscription-meta {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .subscription-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .subscription-actions .btn {
+            flex: 1;
+        }
+
+        .btn-copy {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-copy:hover {
+            background: #138496;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Toast 通知 */
         .toast {
             position: fixed;
             top: 20px;
             right: 20px;
-            min-width: 300px;
-            max-width: 400px;
-            padding: 16px 20px;
+            padding: 15px 20px;
             border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            display: none;
             z-index: 9999;
-            animation: slideInRight 0.3s ease-out;
-        }
-
-        @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(100px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        @keyframes slideOutRight {
-            from {
-                opacity: 1;
-                transform: translateX(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateX(100px);
-            }
-        }
-
-        .toast.show {
-            display: block;
-        }
-
-        .toast.hide {
-            animation: slideOutRight 0.3s ease-out;
+            animation: slideIn 0.3s ease-out;
+            min-width: 250px;
         }
 
         .toast-success {
             background: #28a745;
-            color: white;
-            border-left: 4px solid #1e7e34;
         }
 
         .toast-error {
             background: #dc3545;
-            color: white;
-            border-left: 4px solid #c82333;
         }
 
-        .toast-content {
-            display: flex;
-            align-items: center;
-            gap: 12px;
+        .toast-info {
+            background: #17a2b8;
         }
 
-        .toast-icon {
-            font-size: 24px;
-            flex-shrink: 0;
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
 
-        .toast-message {
-            flex: 1;
-            font-weight: 500;
-            line-height: 1.4;
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
         }
 
-        .status-bar {
-            background: #f8f9fa;
-            padding: 15px 30px;
-            border-top: 1px solid #dee2e6;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 13px;
-            color: #666;
+        .toast.hiding {
+            animation: slideOut 0.3s ease-in forwards;
         }
 
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                overflow-x: hidden;
+            }
+
+            .header {
+                padding: 12px 15px;
+                margin-bottom: 10px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .header p {
+                font-size: 11px;
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+                gap: 10px;
+                height: auto;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .panel {
+                min-height: auto;
+            }
+
+            /* 移动端：转订阅源管理在上面 */
+            .panel:first-child {
+                order: 2;
+            }
+
+            .panel:last-child {
+                order: 1;
+            }
+
+            .panel-content {
+                padding: 20px;
+                max-height: 600px;
+            }
+
+            .dns-inputs {
+                grid-template-columns: 1fr;
+            }
+
+            .subscription-meta {
+                grid-template-columns: 1fr;
+                gap: 5px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .subscription-actions {
+                flex-direction: column;
+            }
+
+            .toast {
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+            }
         }
 
-        .status-dot {
+        /* 滚动条美化 */
+        .panel-content::-webkit-scrollbar {
             width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #28a745;
-            animation: pulse 2s infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .panel-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
         }
 
-        .dns-container {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
         }
 
-        .dns-item {
-            flex: 1;
-            min-width: 200px;
+        .panel-content::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="main-container">
+        <!-- 头部 -->
         <div class="header">
-            <h1>🔧 WireGuard 配置管理</h1>
-            <p>通过Web界面管理你的配置参数</p>
+            <h1>🔐 WireGuard 配置管理中心</h1>
+            <p>统一管理您的 Clash 订阅配置和 WireGuard 代理</p>
         </div>
 
-        <div class="content">
-            <form id="configForm">
-                <!-- 订阅源配置 -->
-                <div class="form-group">
-                    <label>📡 订阅源地址</label>
-                    <div class="url-list" id="urlList">
-                        <!-- 动态添加 -->
-                    </div>
-                    <button type="button" class="btn btn-add" onclick="addUrlInput()">➕ 添加订阅源</button>
-                    <div class="help-text">添加一个或多个 Clash 配置订阅地址</div>
+        <!-- 左右布局 -->
+        <div class="layout">
+            <!-- 左侧：订阅配置 -->
+            <div class="panel">
+                <div class="panel-header">
+                    ⚙️ 订阅配置
                 </div>
-
-                <!-- WireGuard 配置 -->
-                <div class="form-group">
-                    <label>🔌 WireGuard MTU</label>
-                    <input type="number" id="wgMtu" name="wgMtu" min="1" max="1500" required>
-                    <div class="help-text">MTU 值（1-1500）</div>
-                </div>
-
-                <div class="form-group">
-                    <label>🌐 DNS 服务器</label>
-                    <div class="dns-container">
-                        <div class="dns-item">
-                            <input type="text" id="dns1" placeholder="8.8.8.8">
+                <div class="panel-content">
+                    <form id="configForm">
+                        <!-- 订阅源地址 -->
+                        <div class="form-group">
+                            <label>订阅源地址</label>
+                            <div class="url-list" id="urlList"></div>
+                            <button type="button" class="btn btn-add btn-small" onclick="addUrlInput()">+ 添加订阅源</button>
+                            <div class="help-text">支持多个 Clash 订阅源地址</div>
                         </div>
-                        <div class="dns-item">
-                            <input type="text" id="dns2" placeholder="1.1.1.1 (可选)">
+
+                        <!-- WireGuard MTU -->
+                        <div class="form-group">
+                            <label for="wgMtu">WireGuard MTU</label>
+                            <input type="number" id="wgMtu" name="wgMtu" required>
+                            <div class="help-text">建议值：1280-1420</div>
                         </div>
+
+                        <!-- WireGuard DNS -->
+                        <div class="form-group">
+                            <label>WireGuard DNS</label>
+                            <div class="dns-inputs">
+                                <input type="text" id="wgDns1" name="wgDns1" placeholder="主 DNS" required>
+                                <input type="text" id="wgDns2" name="wgDns2" placeholder="备用 DNS" required>
+                            </div>
+                            <div class="help-text">配置 WireGuard 使用的 DNS 服务器</div>
+                        </div>
+
+                        <!-- 代理组名称 -->
+                        <div class="form-group">
+                            <label for="wgGroupName">代理组名称</label>
+                            <input type="text" id="wgGroupName" name="wgGroupName" required>
+                            <div class="help-text">在 Clash 中显示的代理组名称</div>
+                        </div>
+
+                        <!-- 路由规则 -->
+                        <div class="form-group">
+                            <label for="prependRules">路由规则</label>
+                            <textarea id="prependRules" name="prependRules" rows="6" placeholder="每行一条规则，例如：&#10;IP-CIDR,192.168.0.0/16,🏠 Home&#10;DOMAIN-KEYWORD,local,🏠 Home"></textarea>
+                            <div class="help-text">自定义路由规则，每行一条</div>
+                        </div>
+
+                        <!-- 按钮组 -->
+                        <div class="button-group">
+                            <button type="submit" class="btn btn-primary">💾 保存配置</button>
+                            <button type="button" class="btn btn-secondary" onclick="location.reload()">🔄 重新加载</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 右侧：转订阅源管理 -->
+            <div class="panel">
+                <div class="panel-header">
+                    🔗 转订阅源管理
+                </div>
+                <div class="panel-content">
+                    <!-- 生成订阅 -->
+                    <div class="form-group">
+                        <label for="configSelect">选择配置文件</label>
+                        <select id="configSelect">
+                            <option value="">请选择...</option>
+                        </select>
+                        <button type="button" class="btn btn-success" style="margin-top: 10px; width: 100%;" onclick="generateSubscription()">
+                            ✨ 生成订阅链接
+                        </button>
                     </div>
-                    <div class="help-text">配置一个或多个DNS服务器</div>
-                </div>
 
-                <div class="form-group">
-                    <label>🏠 代理组名称</label>
-                    <input type="text" id="wgGroupName" name="wgGroupName" required>
-                    <div class="help-text">在 Clash 中显示的代理组名称（修改后会自动更新规则中的名称）</div>
-                </div>
+                    <hr style="margin: 30px 0; border: none; border-top: 2px solid #e0e0e0;">
 
-                <div class="form-group">
-                    <label>📋 路由规则</label>
-                    <textarea id="prependRules" name="prependRules" placeholder="每行一条规则，例如：&#10;IP-CIDR,192.168.0.0/16,🏠 Home&#10;DOMAIN-KEYWORD,local,🏠 Home"></textarea>
-                    <div class="help-text">每行一条规则，将添加到配置文件rules开头（代理组名称会自动同步）</div>
+                    <!-- 订阅列表 -->
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 15px; color: #333;">已生成的订阅</label>
+                        <div id="subscriptionList"></div>
+                    </div>
                 </div>
-
-                <div class="actions">
-                    <button type="button" class="btn btn-secondary" onclick="loadConfig()">🔄 重新加载</button>
-                    <button type="submit" class="btn btn-primary">💾 保存配置</button>
-                </div>
-            </form>
-        </div>
-
-        <div class="status-bar">
-            <div class="status-indicator">
-                <div class="status-dot"></div>
-                <span>服务运行中</span>
             </div>
-            <div>
-                <a href="/health" target="_blank" style="color: #667eea; text-decoration: none;">查看服务状态 →</a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast 提示框 -->
-    <div id="toast" class="toast">
-        <div class="toast-content">
-            <div class="toast-icon" id="toastIcon"></div>
-            <div class="toast-message" id="toastMessage"></div>
         </div>
     </div>
 
     <script>
-        // 存储上一次的代理组名称
+        // 认证检查
+        const authToken = sessionStorage.getItem('authToken');
+        if (!authToken) {
+            window.location.href = '/login.html';
+        }
+
+        // 设置全局请求头
+        function getAuthHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            };
+        }
+
+        // 处理认证错误
+        function handleAuthError(response) {
+            if (response.status === 401) {
+                sessionStorage.removeItem('authToken');
+                window.location.href = '/login.html';
+                return true;
+            }
+            return false;
+        }
+
         let lastGroupName = '';
 
-        // 显示 Toast 提示消息
-        function showToast(message, type = 'success', callback) {
-            const toast = document.getElementById('toast');
-            const toastIcon = document.getElementById('toastIcon');
-            const toastMessage = document.getElementById('toastMessage');
-            
-            // 设置图标
-            if (type === 'success') {
-                toastIcon.textContent = '✓';
-                toast.className = 'toast toast-success show';
-            } else {
-                toastIcon.textContent = '✕';
-                toast.className = 'toast toast-error show';
-            }
-            
-            // 设置消息
-            toastMessage.textContent = message;
-            
-            // 3秒后自动隐藏
+        // Toast 通知
+        function showToast(message, type = 'success', callback = null) {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
             setTimeout(() => {
-                toast.classList.add('hide');
+                toast.classList.add('hiding');
                 setTimeout(() => {
-                    toast.className = 'toast';
-                    // 如果有回调函数，执行它
-                    if (callback) {
-                        callback();
-                    }
-                }, 300); // 等待动画完成
-            }, 3000);
-        }
-
-        // 更新规则中的代理组名称
-        function updateRulesGroupName(oldName, newName) {
-            if (!oldName || !newName || oldName === newName) return;
-            
-            const rulesTextarea = document.getElementById('prependRules');
-            const rules = rulesTextarea.value;
-            
-            if (!rules) return;
-            
-            console.log('更新规则：', oldName, '->', newName);
-            
-            // 替换规则中的旧名称为新名称
-            // 规则格式：TYPE,VALUE,GROUP_NAME
-            // 找到最后一个逗号，替换之后的内容（不要 trim，保持原样）
-            const updatedRules = rules.split('\n').map(rule => {
-                if (!rule) return rule; // 空行保持原样
-                
-                // 找到最后一个逗号的位置
-                const lastCommaIndex = rule.lastIndexOf(',');
-                if (lastCommaIndex === -1) return rule;
-                
-                // 获取逗号后的代理组名称（不要 trim，保持原样）
-                const currentGroupName = rule.substring(lastCommaIndex + 1);
-                
-                // 如果匹配旧名称，则替换
-                if (currentGroupName === oldName) {
-                    const newRule = rule.substring(0, lastCommaIndex + 1) + newName;
-                    console.log('规则已更新:', rule, '->', newRule);
-                    return newRule;
-                }
-                
-                return rule;
-            }).join('\n');
-            
-            rulesTextarea.value = updatedRules;
-        }
-
-        // 添加订阅源输入框
-        function addUrlInput(value = '') {
-            const urlList = document.getElementById('urlList');
-            const urlItem = document.createElement('div');
-            urlItem.className = 'url-item';
-            urlItem.innerHTML = `
-                <input type="text" class="config-url" placeholder="https://example.com/config.yaml" value="${value}">
-                <button type="button" class="btn btn-danger" onclick="removeUrlInput(this)">✕</button>
-            `;
-            urlList.appendChild(urlItem);
-        }
-
-        // 删除订阅源输入框
-        function removeUrlInput(btn) {
-            btn.parentElement.remove();
-            // 确保至少有一个输入框
-            const urlList = document.getElementById('urlList');
-            if (urlList.children.length === 0) {
-                addUrlInput();
-            }
+                    document.body.removeChild(toast);
+                    if (callback) callback();
+                }, 300);
+            }, 2000);
         }
 
         // 加载配置
         async function loadConfig(showMessage = true) {
             try {
-                const response = await fetch('/api/config');
-                if (!response.ok) throw new Error('加载配置失败');
+                const response = await fetch('/api/config', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (handleAuthError(response)) return;
                 
                 const config = await response.json();
-                
-                // 清空并重新填充订阅源
+
+                // 填充订阅源地址
                 const urlList = document.getElementById('urlList');
                 urlList.innerHTML = '';
-                if (config.configUrls && config.configUrls.length > 0) {
-                    config.configUrls.forEach(url => addUrlInput(url));
-                } else {
-                    addUrlInput();
-                }
-                
+                config.configUrls.forEach(url => addUrlInput(url));
+
                 // 填充其他字段
-                document.getElementById('wgMtu').value = config.wgMtu || 1340;
-                const groupName = config.wgGroupName || '🏠 Home';
-                document.getElementById('wgGroupName').value = groupName;
-                lastGroupName = groupName; // 保存当前代理组名称
-                
-                // DNS
-                const dns = config.wgDns || ['8.8.8.8'];
-                document.getElementById('dns1').value = dns[0] || '';
-                document.getElementById('dns2').value = dns[1] || '';
-                
-                // 规则
-                const rules = config.prependRules || [];
-                document.getElementById('prependRules').value = rules.join('\n');
-                
-                // 只在需要时显示提示
+                document.getElementById('wgMtu').value = config.wgMtu;
+                const [dns1, dns2] = config.wgDns;
+                document.getElementById('wgDns1').value = dns1 || '';
+                document.getElementById('wgDns2').value = dns2 || '';
+                document.getElementById('wgGroupName').value = config.wgGroupName;
+                document.getElementById('prependRules').value = config.prependRules.join('\n');
+
+                lastGroupName = config.wgGroupName;
+
                 if (showMessage) {
                     showToast('配置加载成功', 'success');
                 }
             } catch (error) {
-                if (showMessage) {
-                    showToast('加载配置失败: ' + error.message, 'error');
-                }
+                showToast('加载配置失败: ' + error.message, 'error');
             }
         }
 
         // 保存配置
         async function saveConfig(event) {
             event.preventDefault();
-            
+
+            const urlInputs = document.querySelectorAll('.url-item input');
+            const configUrls = Array.from(urlInputs)
+                .map(input => {
+                    // 如果是脱敏状态，使用真实值
+                    if (input.classList.contains('masked') && input.dataset.realValue) {
+                        return input.dataset.realValue.trim();
+                    }
+                    return input.value.trim();
+                })
+                .filter(url => url);
+
+            const wgDns1 = document.getElementById('wgDns1').value.trim();
+            const wgDns2 = document.getElementById('wgDns2').value.trim();
+            const prependRulesText = document.getElementById('prependRules').value;
+            const prependRules = prependRulesText
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line);
+
+            const newConfig = {
+                configUrls,
+                wgMtu: parseInt(document.getElementById('wgMtu').value),
+                wgDns: [wgDns1, wgDns2],
+                wgGroupName: document.getElementById('wgGroupName').value,
+                prependRules
+            };
+
             try {
-                // 收集订阅源
-                const configUrls = Array.from(document.querySelectorAll('.config-url'))
-                    .map(input => input.value.trim())
-                    .filter(url => url !== '');
-                
-                // 收集 DNS
-                const wgDns = [
-                    document.getElementById('dns1').value.trim(),
-                    document.getElementById('dns2').value.trim()
-                ].filter(dns => dns !== '');
-                
-                if (wgDns.length === 0) {
-                    throw new Error('至少需要配置一个DNS服务器');
-                }
-                
-                // 收集规则
-                const prependRules = document.getElementById('prependRules').value
-                    .split('\n')
-                    .map(rule => rule.trim())
-                    .filter(rule => rule !== '');
-                
-                const groupName = document.getElementById('wgGroupName').value; // 不要 trim
-                if (!groupName || groupName.trim() === '') { // 只检查是否为空
-                    throw new Error('代理组名称不能为空');
-                }
-                
-                const config = {
-                    configUrls: configUrls,
-                    wgMtu: parseInt(document.getElementById('wgMtu').value),
-                    wgDns: wgDns,
-                    wgGroupName: groupName,
-                    prependRules: prependRules
-                };
-                
                 const response = await fetch('/api/config', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(config)
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(newConfig)
                 });
-                
+
+                if (handleAuthError(response)) return;
+
                 if (!response.ok) {
                     const error = await response.json();
                     throw new Error(error.error || '保存失败');
                 }
-                
-                // 更新保存的代理组名称
-                lastGroupName = groupName;
-                
-                // 显示成功提示，toast 消失后刷新页面
-                showToast('配置保存成功！', 'success', function() {
-                    // Toast 消失后静默重新加载配置（不显示提示）
+
+                showToast('配置保存成功！', 'success', () => {
                     loadConfig(false);
                 });
             } catch (error) {
-                showToast('保存配置失败: ' + error.message, 'error');
+                showToast('保存失败: ' + error.message, 'error');
             }
         }
 
-        // 监听代理组名称失去焦点
+        // 添加 URL 输入框
+        // 脱敏URL函数
+        function maskUrl(url) {
+            if (!url || url.length < 20) return url;
+            
+            // 提取协议
+            const protocolEnd = url.indexOf('://');
+            if (protocolEnd === -1) return url;
+            
+            const protocol = url.substring(0, protocolEnd + 3);
+            const rest = url.substring(protocolEnd + 3);
+            
+            // 显示前5个字符和后5个字符
+            const visibleStart = rest.substring(0, 5);
+            const visibleEnd = rest.substring(rest.length - 5);
+            
+            return `${protocol}${visibleStart}${'*'.repeat(Math.min(30, rest.length - 10))}${visibleEnd}`;
+        }
+
+        function addUrlInput(value = '') {
+            const urlList = document.getElementById('urlList');
+            const urlItem = document.createElement('div');
+            urlItem.className = 'url-item';
+            
+            // 创建输入框包装器
+            const inputWrapper = document.createElement('div');
+            inputWrapper.className = 'url-input-wrapper';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'https://example.com/clash/config';
+            input.dataset.realValue = value; // 存储真实值
+            
+            // 如果有值，初始显示为脱敏状态
+            if (value) {
+                input.value = maskUrl(value);
+                input.classList.add('masked');
+                input.readOnly = true;
+            }
+            
+            // 眼睛按钮
+            const eyeBtn = document.createElement('button');
+            eyeBtn.type = 'button';
+            eyeBtn.className = 'btn-eye';
+            eyeBtn.innerHTML = '👁️';
+            eyeBtn.title = '显示/隐藏完整地址';
+            eyeBtn.onclick = () => toggleUrlVisibility(input, eyeBtn);
+            
+            // 删除按钮
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-danger btn-small';
+            removeBtn.textContent = '删除';
+            removeBtn.onclick = () => removeUrlInput(removeBtn);
+            
+            inputWrapper.appendChild(input);
+            inputWrapper.appendChild(eyeBtn);
+            urlItem.appendChild(inputWrapper);
+            urlItem.appendChild(removeBtn);
+            urlList.appendChild(urlItem);
+        }
+
+        // 切换URL显示/隐藏
+        function toggleUrlVisibility(input, eyeBtn) {
+            if (input.classList.contains('masked')) {
+                // 显示完整地址
+                input.value = input.dataset.realValue || input.value;
+                input.classList.remove('masked');
+                input.readOnly = false;
+                eyeBtn.innerHTML = '🙈';
+                eyeBtn.title = '隐藏地址';
+            } else {
+                // 脱敏显示
+                input.dataset.realValue = input.value;
+                input.value = maskUrl(input.value);
+                input.classList.add('masked');
+                input.readOnly = true;
+                eyeBtn.innerHTML = '👁️';
+                eyeBtn.title = '显示完整地址';
+            }
+        }
+
+        // 删除 URL 输入框
+        function removeUrlInput(btn) {
+            const urlList = document.getElementById('urlList');
+            if (urlList.children.length > 1) {
+                btn.parentElement.remove();
+            } else {
+                showToast('至少保留一个订阅源', 'error');
+            }
+        }
+
+        // 监听代理组名称变化，更新路由规则
         function setupGroupNameListener() {
             const groupNameInput = document.getElementById('wgGroupName');
-            
-            // 只监听失去焦点事件
             groupNameInput.addEventListener('blur', function() {
-                const newName = this.value; // 不要 trim，保持原样
-                
-                // 每次失去焦点都更新规则（不管是否有变化）
-                if (lastGroupName && newName) {
-                    console.log('失去焦点，更新规则:', lastGroupName, '->', newName);
+                const newName = this.value;
+                if (lastGroupName && lastGroupName !== newName) {
                     updateRulesGroupName(lastGroupName, newName);
-                    // 立即更新 lastGroupName，这样下次失去焦点时可以继续更新
-                    lastGroupName = newName;
                 }
+                lastGroupName = newName;
             });
         }
 
-        // 初始化
-        document.getElementById('configForm').addEventListener('submit', saveConfig);
-        
-        // 页面加载时加载配置并设置监听器
-        window.addEventListener('load', function() {
+        // 更新规则中的代理组名称
+        function updateRulesGroupName(oldName, newName) {
+            const rulesTextarea = document.getElementById('prependRules');
+            const rules = rulesTextarea.value.split('\n');
+            
+            const updatedRules = rules.map(rule => {
+                if (!rule.trim()) return rule;
+                
+                const lastCommaIndex = rule.lastIndexOf(',');
+                if (lastCommaIndex === -1) return rule;
+                
+                const beforeComma = rule.substring(0, lastCommaIndex + 1);
+                const afterComma = rule.substring(lastCommaIndex + 1);
+                
+                if (afterComma === oldName) {
+                    return beforeComma + newName;
+                }
+                
+                return rule;
+            });
+            
+            rulesTextarea.value = updatedRules.join('\n');
+        }
+
+        // 加载配置文件下拉列表
+        async function loadConfigSelect() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                const select = document.getElementById('configSelect');
+                
+                select.innerHTML = '<option value="">请选择...</option>';
+                data.available_configs.forEach(config => {
+                    const option = document.createElement('option');
+                    option.value = config;
+                    option.textContent = config;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                showToast('加载配置列表失败: ' + error.message, 'error');
+            }
+        }
+
+        // 生成订阅
+        async function generateSubscription() {
+            const configName = document.getElementById('configSelect').value;
+            if (!configName) {
+                showToast('请先选择配置文件', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/tokens', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ configName })
+                });
+
+                if (handleAuthError(response)) return;
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || error.error || '生成失败');
+                }
+
+                const result = await response.json();
+                showToast('订阅链接生成成功！', 'success');
+                loadSubscriptions();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        // 加载订阅列表
+        async function loadSubscriptions() {
+            try {
+                const response = await fetch('/api/tokens', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (handleAuthError(response)) return;
+                
+                const tokens = await response.json();
+                
+                const listContainer = document.getElementById('subscriptionList');
+                
+                if (tokens.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                            </svg>
+                            <p>暂无订阅链接</p>
+                            <p style="font-size: 12px; margin-top: 5px;">请在左侧选择配置文件后生成</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 排序逻辑：
+                // 1. 有效的在上面，失效的在下面
+                // 2. 同样状态下，按创建时间倒序（新的在前）
+                const sortedTokens = tokens.sort((a, b) => {
+                    // 先按状态排序
+                    if (a.active && !b.active) return -1;
+                    if (!a.active && b.active) return 1;
+                    // 同样状态下，按创建时间倒序
+                    // 兼容处理：如果是字符串，转换为时间戳
+                    const timeA = typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : a.createdAt;
+                    const timeB = typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt;
+                    return timeB - timeA;
+                });
+                
+                listContainer.innerHTML = sortedTokens.map(token => {
+                    const isActive = token.active !== false;
+                    const statusClass = isActive ? 'status-active' : 'status-inactive';
+                    const statusText = isActive ? '✓ 有效' : '✗ 已失效';
+                    const itemClass = isActive ? '' : ' inactive';
+                    
+                    return `
+                    <div class="subscription-item${itemClass}">
+                        <div class="subscription-header">
+                            <span class="subscription-name">📁 ${token.configName}</span>
+                            <span class="subscription-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="subscription-url">${token.subscriptionUrl}</div>
+                        <div class="subscription-meta">
+                            <div>🕒 创建: ${new Date(token.createdAt).toLocaleString('zh-CN')}</div>
+                            <div>📊 使用: ${token.usageCount || 0} 次</div>
+                            <div>⏰ 最后使用: ${token.lastUsed ? new Date(token.lastUsed).toLocaleString('zh-CN') : '未使用'}</div>
+                        </div>
+                        <div class="subscription-actions">
+                            ${isActive ? `
+                                <button class="btn btn-copy btn-small" onclick="copySubscriptionUrl('${token.subscriptionUrl}')">
+                                    📋 复制链接
+                                </button>
+                                <button class="btn btn-danger btn-small" onclick="revokeSubscription('${token.token}')">
+                                    ❌ 失效
+                                </button>
+                            ` : `
+                                <button class="btn btn-secondary btn-small" disabled>
+                                    已失效
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+                }).join('');
+            } catch (error) {
+                showToast('加载订阅列表失败: ' + error.message, 'error');
+            }
+        }
+
+        // 复制订阅 URL
+        function copySubscriptionUrl(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('订阅链接已复制到剪贴板', 'info');
+            }).catch(() => {
+                showToast('复制失败，请手动复制', 'error');
+            });
+        }
+
+        // 失效订阅
+        async function revokeSubscription(token) {
+            if (!confirm('确定要失效此订阅吗？失效后需要重新生成。')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/tokens/${token}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+
+                if (handleAuthError(response)) return;
+
+                if (!response.ok) {
+                    throw new Error('失效失败');
+                }
+
+                showToast('订阅已失效', 'success');
+                loadSubscriptions();
+            } catch (error) {
+                showToast('操作失败: ' + error.message, 'error');
+            }
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
             loadConfig();
+            loadConfigSelect();
+            loadSubscriptions();
             setupGroupNameListener();
+            
+            document.getElementById('configForm').addEventListener('submit', saveConfig);
+            
+            // 定期刷新订阅列表
+            setInterval(loadSubscriptions, 30000);
         });
     </script>
 </body>
 </html>
-
