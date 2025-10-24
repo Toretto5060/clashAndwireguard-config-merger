@@ -1,0 +1,4 @@
+# 将 WireGuard 配置文件放在此目录
+# 文件名格式: <name>.conf
+# 例如: toretto_pc.conf
+

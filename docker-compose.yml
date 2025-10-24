@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  wireguard-config-merger:
+    build: .
+    container_name: wireguard-config-merger
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CONFIG_URLS=https://example.com/config1.yaml,https://example.com/config2.yaml
+      - CONF_DIR=/app/conf
+      - WG_MTU=1340
+      - WG_DNS=192.168.5.27,8.8.8.8
+      - WG_GROUP_NAME=🏠 回家
+      - PREPEND_RULES=IP-CIDR,192.168.5.0/24,🏠 回家,IP-CIDR,10.0.10.0/24,🏠 回家,DOMAIN-KEYWORD,lybaby,🏠 回家
+    volumes:
+      - ./conf:/app/conf:ro
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
