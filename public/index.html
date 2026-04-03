@@ -72,6 +72,15 @@
             flex-shrink: 0;
         }
 
+        .panel-header-sub {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 400;
+            opacity: 0.88;
+            margin-left: 10px;
+            line-height: 1.4;
+        }
+
         .panel-content {
             padding: 30px;
             flex: 1;
@@ -178,6 +187,150 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
+        }
+
+        .wg-profile-card {
+            border: 2px solid #e8e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 14px;
+            background: #fafbff;
+        }
+
+        .wg-profile-card .wg-profile-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .wg-profile-card .form-group {
+            margin-bottom: 16px;
+        }
+
+        .wg-profile-card .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .wg-direct-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .wg-direct-row input[type="checkbox"] {
+            width: auto;
+        }
+
+        .right-mode-radios {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            margin-bottom: 8px;
+        }
+
+        .right-mode-radios label {
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .right-mode-radios input[type="radio"] {
+            width: auto;
+        }
+
+        .delete-radio-list {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+
+        .delete-radio-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 4px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .delete-radio-row:last-child {
+            border-bottom: none;
+        }
+
+        .delete-radio-row input[type="radio"] {
+            width: auto;
+            flex-shrink: 0;
+            margin-right: 8px;
+        }
+
+        .script-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .script-modal {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            width: 90%;
+            max-width: 720px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .script-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: #f5f5f7;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .script-modal-header button {
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 6px;
+        }
+
+        .script-modal-body {
+            padding: 0;
+        }
+
+        .script-modal-body pre {
+            margin: 0;
+            max-height: 70vh;
+            overflow: auto;
+            font-size: 12px;
+            background: #1e1e1e;
+            color: #eee;
+            padding: 12px;
+            white-space: pre-wrap;
         }
 
         .btn {
@@ -528,41 +681,24 @@
                             <div class="help-text">支持多个 Clash 订阅源地址</div>
                         </div>
 
-                        <!-- WireGuard MTU -->
+                        <!-- WireGuard 配置（单组模式） -->
                         <div class="form-group">
-                            <label for="wgMtu">WireGuard MTU</label>
-                            <input type="number" id="wgMtu" name="wgMtu" required>
-                            <div class="help-text">建议值：1280-1420</div>
-                        </div>
-
-                        <!-- WireGuard DNS -->
-                        <div class="form-group">
-                            <label>WireGuard DNS</label>
-                            <div class="dns-inputs">
-                                <input type="text" id="wgDns1" name="wgDns1" placeholder="主 DNS" required>
-                                <input type="text" id="wgDns2" name="wgDns2" placeholder="备用 DNS" required>
-                            </div>
-                            <div class="help-text">配置 WireGuard 使用的 DNS 服务器</div>
-                        </div>
-
-                        <!-- 代理组名称 -->
-                        <div class="form-group">
-                            <label for="wgGroupName">代理组名称</label>
-                            <input type="text" id="wgGroupName" name="wgGroupName" required>
-                            <div class="help-text">在 Clash 中显示的代理组名称</div>
+                            <label>WireGuard 配置</label>
+                            <div class="help-text" style="margin-bottom:10px;">当前仅使用一组 WireGuard 参数，应用于每个订阅对应的配置文件。</div>
+                            <div id="wgProfilesContainer"></div>
                         </div>
 
                         <!-- 路由规则 -->
                         <div class="form-group">
                             <label for="prependRules">路由规则</label>
-                            <textarea id="prependRules" name="prependRules" rows="6" placeholder="每行一条规则，例如：&#10;IP-CIDR,192.168.0.0/16,🏠 Home&#10;DOMAIN-KEYWORD,local,🏠 Home"></textarea>
-                            <div class="help-text">自定义路由规则，每行一条</div>
+                            <textarea id="prependRules" name="prependRules" rows="6" placeholder="每行一条规则（全局共用）。代理组名需与上方某一组「代理组名称」一致，例如：&#10;IP-CIDR,192.168.0.0/16,🏠 Home&#10;IP-CIDR,10.0.0.0/8,🏢 Office"></textarea>
+                            <div class="help-text">自定义路由规则，每行一条；全部 WireGuard 组共用本列表</div>
                         </div>
 
                         <!-- 按钮组 -->
                         <div class="button-group">
                             <button type="submit" class="btn btn-primary">💾 保存配置</button>
-                            <button type="button" class="btn btn-secondary" onclick="location.reload()">🔄 重新加载</button>
+                            <button type="button" class="btn btn-secondary" id="btnReloadConf" onclick="reloadConfFromServer()">🔄 重新加载</button>
                         </div>
                     </form>
                 </div>
@@ -572,15 +708,46 @@
             <div class="panel">
                 <div class="panel-header">
                     🔗 转订阅源管理
+                    <span class="panel-header-sub">只能管理宿主机下的 WireGuard 配置</span>
                 </div>
                 <div class="panel-content">
-                    <!-- 生成订阅 -->
+                    <!-- 生成订阅 / 新增客户端 / 删除客户端 -->
                     <div class="form-group">
-                        <label for="configSelect">选择配置文件</label>
-                        <select id="configSelect">
-                            <option value="">请选择...</option>
-                        </select>
-                        <button type="button" class="btn btn-success" style="margin-top: 10px; width: 100%;" onclick="generateSubscription()">
+                        <label>操作类型</label>
+                        <div class="right-mode-radios">
+                            <label><input type="radio" name="rightPanelMode" value="generate" checked> 生成订阅</label>
+                            <label><input type="radio" name="rightPanelMode" value="add"> 新增客户端</label>
+                            <label><input type="radio" name="rightPanelMode" value="delete"> 删除客户端</label>
+                        </div>
+                    </div>
+
+                    <div id="rightPanelGenerate" class="right-panel-mode-section">
+                        <div class="form-group">
+                            <label for="configSelect">选择配置文件</label>
+                            <select id="configSelect">
+                                <option value="">请选择...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="rightPanelAdd" class="right-panel-mode-section" style="display: none;">
+                        <div class="form-group">
+                            <label for="newClientName">客户端名称</label>
+                            <input type="text" id="newClientName" placeholder="例如 openwrt（将传给 add-client.sh）" autocomplete="off">
+                            <div class="help-text">仅字母、数字、<code>.</code> <code>_</code> <code>-</code>；与路由器生成的 <code>.conf</code> 文件名一致</div>
+                        </div>
+                    </div>
+
+                    <div id="rightPanelDelete" class="right-panel-mode-section" style="display: none;">
+                        <div class="form-group">
+                            <label>选择要删除的客户端（与当前 conf 列表一致）</label>
+                            <div id="deleteConfigRadioList" class="delete-radio-list"></div>
+                            <div class="help-text">将调用 <code>delete-client.sh &lt;名称&gt;</code>；脚本可在 <code>/app/script</code> 中替换</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <button type="button" id="rightPanelActionBtn" class="btn btn-success" style="width: 100%;" onclick="rightPanelPrimaryAction()">
                             ✨ 生成订阅链接
                         </button>
                     </div>
@@ -622,7 +789,157 @@
             return false;
         }
 
-        let lastGroupName = '';
+        let availableConfigsList = [];
+
+        function genWgId() {
+            return 'wg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        }
+
+        function fillWgProfileConfigSelects() {
+            document.querySelectorAll('.wg-config-select').forEach(sel => {
+                const cur = sel.value;
+                sel.innerHTML = '';
+                const opt0 = document.createElement('option');
+                opt0.value = '';
+                opt0.textContent = '（未选择，订阅中不包含该 conf）';
+                sel.appendChild(opt0);
+                availableConfigsList.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name;
+                    sel.appendChild(opt);
+                });
+                if (cur && [...sel.options].some(o => o.value === cur)) {
+                    sel.value = cur;
+                }
+            });
+        }
+
+        function addWgProfileRow(profile = {}) {
+            const id = profile.id || 'wg-single-profile';
+            const container = document.getElementById('wgProfilesContainer');
+            const card = document.createElement('div');
+            card.className = 'wg-profile-card';
+            card.dataset.profileId = id;
+
+            const title = document.createElement('div');
+            title.className = 'wg-profile-title';
+            const titleLabel = document.createElement('span');
+            titleLabel.textContent = '🔌 WireGuard 参数';
+            title.appendChild(titleLabel);
+            card.appendChild(title);
+
+            const fg2 = document.createElement('div');
+            fg2.className = 'form-group';
+            const lb2 = document.createElement('label');
+            lb2.textContent = 'WireGuard MTU';
+            const mtu = document.createElement('input');
+            mtu.type = 'number';
+            mtu.className = 'wg-mtu';
+            mtu.required = true;
+            mtu.value = profile.wgMtu != null ? profile.wgMtu : 1340;
+            const ht2 = document.createElement('div');
+            ht2.className = 'help-text';
+            ht2.textContent = '建议值：1280-1420';
+            fg2.appendChild(lb2);
+            fg2.appendChild(mtu);
+            fg2.appendChild(ht2);
+            card.appendChild(fg2);
+
+            const fg3 = document.createElement('div');
+            fg3.className = 'form-group';
+            const lb3 = document.createElement('label');
+            lb3.textContent = 'WireGuard DNS';
+            const dnsWrap = document.createElement('div');
+            dnsWrap.className = 'dns-inputs';
+            const dns1 = document.createElement('input');
+            dns1.type = 'text';
+            dns1.className = 'wg-dns1';
+            dns1.placeholder = '主 DNS';
+            dns1.required = true;
+            const dns2 = document.createElement('input');
+            dns2.type = 'text';
+            dns2.className = 'wg-dns2';
+            dns2.placeholder = '备用 DNS（可空）';
+            const dns = profile.wgDns || ['8.8.8.8', ''];
+            dns1.value = dns[0] || '';
+            dns2.value = dns[1] || '';
+            dnsWrap.appendChild(dns1);
+            dnsWrap.appendChild(dns2);
+            fg3.appendChild(lb3);
+            fg3.appendChild(dnsWrap);
+            card.appendChild(fg3);
+
+            const fg4 = document.createElement('div');
+            fg4.className = 'form-group';
+            const lb4 = document.createElement('label');
+            lb4.textContent = '代理组名称（Clash 中显示，且作为节点名）';
+            const gname = document.createElement('input');
+            gname.type = 'text';
+            gname.className = 'wg-group-name';
+            gname.required = true;
+            gname.value = profile.wgGroupName || '🏠 Home';
+            gname.dataset.lastName = gname.value;
+            const ht4 = document.createElement('div');
+            ht4.className = 'help-text';
+            ht4.textContent = '每组名称须唯一；路由规则里填写的策略组名需与此一致';
+            fg4.appendChild(lb4);
+            fg4.appendChild(gname);
+            fg4.appendChild(ht4);
+            card.appendChild(fg4);
+
+            container.appendChild(card);
+            fillWgProfileConfigSelects();
+            if (profile.configName) {
+                sel.value = profile.configName;
+            }
+        }
+
+        function renderWgProfilesFromConfig(profiles) {
+            const container = document.getElementById('wgProfilesContainer');
+            container.innerHTML = '';
+            if (!profiles || profiles.length === 0) {
+                addWgProfileRow({});
+                return;
+            }
+            profiles.forEach(p => addWgProfileRow(p));
+        }
+
+        function collectWgProfiles() {
+            const cards = document.querySelectorAll('#wgProfilesContainer .wg-profile-card');
+            const out = [];
+            cards.forEach(card => {
+                const dns1 = card.querySelector('.wg-dns1').value.trim();
+                const dns2 = card.querySelector('.wg-dns2').value.trim();
+                let wgDns = [dns1, dns2].map(s => s || '');
+                if (!wgDns.some(d => d)) {
+                    wgDns = ['8.8.8.8'];
+                }
+                out.push({
+                    id: card.dataset.profileId,
+                    wgMtu: parseInt(card.querySelector('.wg-mtu').value, 10),
+                    wgDns,
+                    wgGroupName: card.querySelector('.wg-group-name').value.trim(),
+                    includeDirect: true
+                });
+            });
+            return out;
+        }
+
+        function setupWgGroupNameDelegation() {
+            document.getElementById('wgProfilesContainer').addEventListener('blur', function(e) {
+                const t = e.target;
+                if (!t.classList || !t.classList.contains('wg-group-name')) return;
+                const oldName = t.dataset.lastName || '';
+                const newName = t.value.trim();
+                if (oldName && newName && oldName !== newName) {
+                    updateRulesGroupName(oldName, newName);
+                }
+                if (newName) {
+                    t.dataset.lastName = newName;
+                }
+            }, true);
+        }
 
         // Toast 通知
         function showToast(message, type = 'success', callback = null) {
@@ -656,21 +973,42 @@
                 urlList.innerHTML = '';
                 config.configUrls.forEach(url => addUrlInput(url));
 
-                // 填充其他字段
-                document.getElementById('wgMtu').value = config.wgMtu;
-                const [dns1, dns2] = config.wgDns;
-                document.getElementById('wgDns1').value = dns1 || '';
-                document.getElementById('wgDns2').value = dns2 || '';
-                document.getElementById('wgGroupName').value = config.wgGroupName;
+                renderWgProfilesFromConfig(config.wgProfiles);
                 document.getElementById('prependRules').value = config.prependRules.join('\n');
-
-                lastGroupName = config.wgGroupName;
 
                 if (showMessage) {
                     showToast('配置加载成功', 'success');
                 }
             } catch (error) {
                 showToast('加载配置失败: ' + error.message, 'error');
+            }
+        }
+
+        /** 从磁盘重新扫描 conf、并刷新 data 中的应用配置；替代原定时任务与整页刷新 */
+        async function reloadConfFromServer() {
+            const btn = document.getElementById('btnReloadConf');
+            if (btn) {
+                btn.disabled = true;
+            }
+            try {
+                const response = await fetch('/reload', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                if (handleAuthError(response)) return;
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || '重新加载失败');
+                }
+                await loadConfigSelect();
+                await loadConfig(false);
+                showToast('已重新加载 conf 与配置', 'success');
+            } catch (error) {
+                showToast('重新加载失败: ' + error.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -689,19 +1027,17 @@
                 })
                 .filter(url => url);
 
-            const wgDns1 = document.getElementById('wgDns1').value.trim();
-            const wgDns2 = document.getElementById('wgDns2').value.trim();
             const prependRulesText = document.getElementById('prependRules').value;
             const prependRules = prependRulesText
                 .split('\n')
                 .map(line => line.trim())
                 .filter(line => line);
 
+            const wgProfiles = collectWgProfiles();
+
             const newConfig = {
                 configUrls,
-                wgMtu: parseInt(document.getElementById('wgMtu').value),
-                wgDns: [wgDns1, wgDns2],
-                wgGroupName: document.getElementById('wgGroupName').value,
+                wgProfiles,
                 prependRules
             };
 
@@ -819,18 +1155,6 @@
             }
         }
 
-        // 监听代理组名称变化，更新路由规则
-        function setupGroupNameListener() {
-            const groupNameInput = document.getElementById('wgGroupName');
-            groupNameInput.addEventListener('blur', function() {
-                const newName = this.value;
-                if (lastGroupName && lastGroupName !== newName) {
-                    updateRulesGroupName(lastGroupName, newName);
-                }
-                lastGroupName = newName;
-            });
-        }
-
         // 更新规则中的代理组名称
         function updateRulesGroupName(oldName, newName) {
             const rulesTextarea = document.getElementById('prependRules');
@@ -860,6 +1184,9 @@
             try {
                 const response = await fetch('/health');
                 const data = await response.json();
+                availableConfigsList = data.available_configs || [];
+                fillWgProfileConfigSelects();
+
                 const select = document.getElementById('configSelect');
                 
                 select.innerHTML = '<option value="">请选择...</option>';
@@ -869,8 +1196,194 @@
                     option.textContent = config;
                     select.appendChild(option);
                 });
+                renderDeleteConfigRadios();
             } catch (error) {
                 showToast('加载配置列表失败: ' + error.message, 'error');
+            }
+        }
+
+        function renderDeleteConfigRadios() {
+            const box = document.getElementById('deleteConfigRadioList');
+            if (!box) return;
+            box.innerHTML = '';
+            if (!availableConfigsList.length) {
+                box.innerHTML = '<div class="help-text" style="margin:0;">暂无 conf，请先在本机 <code>conf</code> 目录放入 <code>.conf</code> 或点击左侧「重新加载」</div>';
+                return;
+            }
+            availableConfigsList.forEach(name => {
+                const row = document.createElement('label');
+                row.className = 'delete-radio-row';
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'deleteConfigName';
+                radio.value = name;
+                row.appendChild(radio);
+                const span = document.createElement('span');
+                span.textContent = name;
+                row.appendChild(span);
+                box.appendChild(row);
+            });
+        }
+
+        function syncRightPanelMode() {
+            const mode = document.querySelector('input[name="rightPanelMode"]:checked').value;
+            const gen = document.getElementById('rightPanelGenerate');
+            const add = document.getElementById('rightPanelAdd');
+            const del = document.getElementById('rightPanelDelete');
+            const btn = document.getElementById('rightPanelActionBtn');
+            if (gen) gen.style.display = mode === 'generate' ? 'block' : 'none';
+            if (add) add.style.display = mode === 'add' ? 'block' : 'none';
+            if (del) del.style.display = mode === 'delete' ? 'block' : 'none';
+            if (btn) {
+                if (mode === 'generate') {
+                    btn.textContent = '✨ 生成订阅链接';
+                    btn.classList.remove('btn-danger');
+                    btn.classList.add('btn-success');
+                } else if (mode === 'add') {
+                    btn.textContent = '➕ 新增客户端';
+                    btn.classList.remove('btn-danger');
+                    btn.classList.add('btn-success');
+                } else {
+                    btn.textContent = '🗑️ 删除客户端';
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-danger');
+                    renderDeleteConfigRadios();
+                }
+            }
+            updateAddClientButtonState();
+        }
+
+        function showScriptOutput(title, text) {
+            const backdrop = document.getElementById('scriptModal');
+            const titleEl = document.getElementById('scriptModalTitle');
+            const bodyEl = document.getElementById('scriptModalBody');
+            if (!backdrop || !titleEl || !bodyEl) {
+                console.log(title, text);
+                return;
+            }
+            if (!text || !text.trim()) {
+                backdrop.style.display = 'none';
+                bodyEl.textContent = '';
+                return;
+            }
+            titleEl.textContent = title || '脚本输出';
+            bodyEl.textContent = text;
+            backdrop.style.display = 'flex';
+        }
+
+        function closeScriptModal() {
+            const backdrop = document.getElementById('scriptModal');
+            const bodyEl = document.getElementById('scriptModalBody');
+            if (backdrop) {
+                backdrop.style.display = 'none';
+            }
+            if (bodyEl) {
+                bodyEl.textContent = '';
+            }
+        }
+
+        function updateAddClientButtonState() {
+            const input = document.getElementById('newClientName');
+            const btn = document.getElementById('rightPanelActionBtn');
+            const modeRadio = document.querySelector('input[name="rightPanelMode"]:checked');
+            if (!btn) return;
+            const mode = modeRadio ? modeRadio.value : 'generate';
+            if (mode !== 'add') {
+                btn.disabled = false;
+                return;
+            }
+            const hasValue = input && input.value.trim().length > 0;
+            btn.disabled = !hasValue;
+        }
+
+        function rightPanelPrimaryAction() {
+            const mode = document.querySelector('input[name="rightPanelMode"]:checked').value;
+            if (mode === 'generate') {
+                generateSubscription();
+            } else if (mode === 'add') {
+                runAddClientScript();
+            } else {
+                runDeleteClientScript();
+            }
+        }
+
+        async function runAddClientScript() {
+            const name = document.getElementById('newClientName').value.trim();
+            if (!name) {
+                showToast('请输入客户端名称', 'error');
+                return;
+            }
+            if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
+                showToast('名称仅允许字母、数字、. _ -', 'error');
+                return;
+            }
+            const btn = document.getElementById('rightPanelActionBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const response = await fetch('/api/wg/add-client', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ name })
+                });
+                if (handleAuthError(response)) return;
+                const data = await response.json();
+                const out = [data.stdout, data.stderr].filter(Boolean).join('\n');
+                if (response.ok && data.success) {
+                    const okText = out.includes('客户端配置已生成') || out.includes('配置已存在');
+                    showToast(okText ? '操作成功（见脚本输出）' : '脚本已执行', okText ? 'success' : 'info');
+                    showScriptOutput('add-client.sh 输出', out);
+                    // 刷新 conf 列表 / 删除模式单选
+                    await reloadConfFromServer();
+                    // 清空输入框并更新按钮状态
+                    const input = document.getElementById('newClientName');
+                    if (input) {
+                        input.value = '';
+                    }
+                    updateAddClientButtonState();
+                } else {
+                    showToast(data.error || data.message || '执行失败', 'error');
+                    showScriptOutput('add-client.sh 错误输出', out);
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function runDeleteClientScript() {
+            const sel = document.querySelector('input[name="deleteConfigName"]:checked');
+            if (!sel) {
+                showToast('请选择要删除的配置', 'error');
+                return;
+            }
+            const name = sel.value;
+            if (!confirm('确定执行删除？将调用 delete-client.sh 删除客户端「' + name + '」')) {
+                return;
+            }
+            const btn = document.getElementById('rightPanelActionBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const response = await fetch('/api/wg/delete-client', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ name })
+                });
+                if (handleAuthError(response)) return;
+                const data = await response.json();
+                const out = [data.stdout, data.stderr].filter(Boolean).join('\n');
+                if (response.ok && data.success) {
+                    showToast('删除成功', 'success');
+                    if (out.trim()) showScriptOutput('delete-client.sh 输出', out);
+                    await reloadConfFromServer();
+                } else {
+                    showToast(data.error || data.message || '删除失败', 'error');
+                    showScriptOutput('delete-client.sh 输出', out);
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 
@@ -974,6 +1487,9 @@
                                 <button class="btn btn-secondary btn-small" disabled>
                                     已失效
                                 </button>
+                                <button class="btn btn-danger btn-small" onclick="deleteInactiveSubscription('${token.token}')">
+                                    🗑 删除记录
+                                </button>
                             `}
                         </div>
                     </div>
@@ -1018,18 +1534,74 @@
             }
         }
 
-        // 页面加载时初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            loadConfig();
-            loadConfigSelect();
-            loadSubscriptions();
-            setupGroupNameListener();
-            
+        // 删除已失效订阅记录
+        async function deleteInactiveSubscription(token) {
+            if (!confirm('确定要删除这条已失效订阅记录吗？删除后不可恢复。')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/tokens/${token}/remove`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+                if (handleAuthError(response)) return;
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || '删除失败');
+                }
+                showToast('已删除失效订阅记录', 'success');
+                loadSubscriptions();
+            } catch (error) {
+                showToast('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 页面加载时初始化（先拉取 conf 列表，再渲染 WireGuard 组下拉框）
+        document.addEventListener('DOMContentLoaded', async function() {
+            setupWgGroupNameDelegation();
             document.getElementById('configForm').addEventListener('submit', saveConfig);
-            
-            // 定期刷新订阅列表
+
+            document.querySelectorAll('input[name="rightPanelMode"]').forEach(function(r) {
+                r.addEventListener('change', function() {
+                    syncRightPanelMode();
+                    updateAddClientButtonState();
+                });
+            });
+            const newClientInput = document.getElementById('newClientName');
+            if (newClientInput) {
+                newClientInput.addEventListener('input', updateAddClientButtonState);
+            }
+            syncRightPanelMode();
+            updateAddClientButtonState();
+
+            await loadConfigSelect();
+            await loadConfig(false);
+            loadSubscriptions();
+
             setInterval(loadSubscriptions, 30000);
+
+            // 脚本输出模态框：点击遮罩关闭
+            const modal = document.getElementById('scriptModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        closeScriptModal();
+                    }
+                });
+            }
         });
     </script>
+
+    <div id="scriptModal" class="script-modal-backdrop">
+        <div class="script-modal">
+            <div class="script-modal-header">
+                <span id="scriptModalTitle">脚本输出</span>
+                <button type="button" onclick="closeScriptModal()">×</button>
+            </div>
+            <div class="script-modal-body">
+                <pre id="scriptModalBody"></pre>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

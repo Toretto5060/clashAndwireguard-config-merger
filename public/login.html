@@ -270,10 +270,13 @@
             alert.className = `alert alert-${type}`;
             alert.style.display = 'block';
             
-            loginForm.classList.add('shake');
-            setTimeout(() => {
-                loginForm.classList.remove('shake');
-            }, 500);
+            // 仅在错误时添加抖动效果，成功/提示不抖动
+            if (type === 'error') {
+                loginForm.classList.add('shake');
+                setTimeout(() => {
+                    loginForm.classList.remove('shake');
+                }, 500);
+            }
 
             setTimeout(() => {
                 alert.style.display = 'none';
@@ -308,6 +311,16 @@
                 if (response.ok) {
                     // 登录成功
                     sessionStorage.setItem('authToken', data.token);
+                    try {
+                        await fetch('/reload', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${data.token}`
+                            }
+                        });
+                    } catch (err) {
+                        console.warn('登录后重新加载 conf 失败:', err);
+                    }
                     showAlert('登录成功，正在跳转...', 'info');
                     
                     setTimeout(() => {

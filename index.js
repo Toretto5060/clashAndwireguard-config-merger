@@ -1,10 +1,12 @@
 const express = require('express');
+const fs = require('fs');
+const { execFile } = require('child_process');
 const path = require('path');
 const yaml = require('js-yaml');
 const { loadAllWireGuardConfigs, convertToClashProxy } = require('./wireguard-parser');
-const { fetchAndMergeConfigs, appendWireGuardConfig } = require('./config-merger');
+const { fetchAndMergeConfigs, appendMultipleWireGuardProfiles } = require('./config-merger');
 const { loadConfig, saveConfig, validateConfig } = require('./config-manager');
-const { createToken, validateToken, revokeToken, getTokenByConfig, getAllTokens } = require('./token-manager');
+const { createToken, validateToken, revokeToken, removeToken, getTokenByConfig, getAllTokens } = require('./token-manager');
 const { 
   isIPLocked, 
   recordLoginFailure, 
@@ -17,6 +19,36 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const CONF_DIR = process.env.CONF_DIR || path.join(__dirname, 'conf');
+const SCRIPT_DIR = process.env.SCRIPT_DIR || path.join(__dirname, 'script');
+
+function validateWgClientName(name) {
+  return typeof name === 'string' && /^[a-zA-Z0-9._-]+$/.test(name) && name.length >= 1 && name.length <= 64;
+}
+
+function runWgScript(scriptBase, args, res) {
+  const scriptPath = path.join(SCRIPT_DIR, scriptBase);
+  if (!fs.existsSync(scriptPath)) {
+    return res.status(503).json({
+      success: false,
+      error: `脚本不存在: ${scriptPath}（请挂载 SCRIPT_DIR 或将脚本放入 script 目录）`
+    });
+  }
+  execFile('/bin/sh', [scriptPath, ...args], {
+    timeout: 120000,
+    maxBuffer: 10 * 1024 * 1024,
+    env: process.env
+  }, (err, stdout, stderr) => {
+    const code = err && typeof err.code === 'number' ? err.code : 0;
+    const success = code === 0;
+    res.status(success ? 200 : 500).json({
+      success,
+      exitCode: code,
+      stdout: (stdout || '').toString(),
+      stderr: (stderr || '').toString(),
+      error: success ? undefined : (err && err.message ? err.message : '脚本退出码非 0')
+    });
+  });
+}
 
 // Session存储（内存中）
 const sessions = new Map();
@@ -192,9 +224,6 @@ function loadConfigs() {
 // 初始加载配置
 loadConfigs();
 
-// 定期重新加载配置（每10分钟）
-setInterval(loadConfigs, 10 * 60 * 1000);
-
 // 中间件：日志
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
@@ -218,7 +247,6 @@ app.get('/api/auth/status', (req, res) => {
   }
   
   // 获取当前失败次数（从文件读取）
-  const fs = require('fs');
   const attemptsFile = path.join(__dirname, 'data', 'login-attempts.json');
   let attempts = 0;
   
@@ -367,9 +395,7 @@ app.get('/health', (req, res) => {
     configs: Object.keys(wireguardConfigs), // 保留旧字段以兼容
     configCount: Object.keys(wireguardConfigs).length,
     configUrls: appConfig.configUrls,
-    mtu: appConfig.wgMtu,
-    dns: appConfig.wgDns,
-    groupName: appConfig.wgGroupName
+    wgProfiles: appConfig.wgProfiles
   });
 });
 
@@ -389,6 +415,30 @@ app.post('/reload', requireAuth, (req, res) => {
       error: error.message
     });
   }
+});
+
+// OpenWrt / 宿主机脚本：新增客户端（调用 add-client.sh）
+app.post('/api/wg/add-client', requireAuth, (req, res) => {
+  const name = req.body && req.body.name;
+  if (!validateWgClientName(name)) {
+    return res.status(400).json({
+      success: false,
+      error: '客户端名称无效（仅字母、数字、. _ -，长度 1～64）'
+    });
+  }
+  runWgScript('add-client.sh', [name], res);
+});
+
+// 删除客户端（调用 delete-client.sh，脚本可后续自行替换）
+app.post('/api/wg/delete-client', requireAuth, (req, res) => {
+  const name = req.body && req.body.name;
+  if (!validateWgClientName(name)) {
+    return res.status(400).json({
+      success: false,
+      error: '客户端名称无效（仅字母、数字、. _ -，长度 1～64）'
+    });
+  }
+  runWgScript('delete-client.sh', [name], res);
 });
 
 // Token管理API - 创建token
@@ -473,6 +523,28 @@ app.delete('/api/tokens/:token', requireAuth, (req, res) => {
   }
 });
 
+// Token管理API - 删除失效token记录（彻底移除）
+app.delete('/api/tokens/:token/remove', requireAuth, (req, res) => {
+  try {
+    const { token } = req.params;
+    const all = getAllTokens();
+    const tokenObj = all.find(t => t.token === token);
+    if (!tokenObj) {
+      return res.status(404).json({ error: 'Token不存在' });
+    }
+    if (tokenObj.active !== false) {
+      return res.status(400).json({ error: '仅支持删除已失效的Token记录' });
+    }
+    const success = removeToken(token);
+    if (success) {
+      return res.json({ success: true, message: 'Token记录已删除' });
+    }
+    res.status(500).json({ error: '删除失败' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 订阅端点 - 通过token获取配置（新格式包含配置名称）
 app.get('/config/:configName/:token', async (req, res) => {
   try {
@@ -537,16 +609,58 @@ app.get('/config/:configName/:token', async (req, res) => {
     const { config: baseConfig, subscriptionInfo, allSubscriptionInfos } = await fetchAndMergeConfigs(appConfig.configUrls);
     
     // 将 WireGuard 配置转换为 Clash 格式
-    const wgConfig = wireguardConfigs[configName];
-    const wgProxy = convertToClashProxy(wgConfig, 'WireGuard', appConfig.wgMtu, appConfig.wgDns);
-    
-    // 追加 WireGuard 配置
-    let finalConfig = appendWireGuardConfig(
-      baseConfig,
-      wgProxy,
-      appConfig.wgGroupName,
-      appConfig.prependRules
-    );
+    const profile = Array.isArray(appConfig.wgProfiles) && appConfig.wgProfiles.length > 0
+      ? appConfig.wgProfiles[0]
+      : null;
+
+    let finalConfig;
+    if (!profile) {
+      console.log(`⚠️ 未配置 WireGuard 参数（wgProfiles 为空），仅返回远程订阅合并结果`);
+      finalConfig = JSON.parse(JSON.stringify(baseConfig));
+      if (!finalConfig.rules) finalConfig.rules = [];
+      finalConfig.rules.unshift(...(appConfig.prependRules || []));
+    } else {
+      const wg = wireguardConfigs[configName];
+      if (!wg) {
+        console.log(`⚠️ 找不到对应的 WireGuard 配置: ${configName}，仅返回远程订阅合并结果`);
+        finalConfig = JSON.parse(JSON.stringify(baseConfig));
+        if (!finalConfig.rules) finalConfig.rules = [];
+        finalConfig.rules.unshift(...(appConfig.prependRules || []));
+      } else {
+        const dns = Array.isArray(profile.wgDns)
+          ? profile.wgDns.map(d => String(d).trim()).filter(Boolean)
+          : [];
+        const dnsList = dns.length ? dns : ['8.8.8.8'];
+        // 关键：节点名不能与代理组名同名，否则会出现 group 自引用（loop is detected）
+        const existingProxyNames = new Set(
+          Array.isArray(baseConfig.proxies)
+            ? baseConfig.proxies.map(p => p && p.name).filter(Boolean)
+            : []
+        );
+        const groupName = String(profile.wgGroupName || 'WireGuard');
+        let wgProxyName = `${groupName} - WG`;
+        let suffix = 2;
+        while (existingProxyNames.has(wgProxyName) || wgProxyName === groupName) {
+          wgProxyName = `${groupName} - WG ${suffix++}`;
+        }
+        const wgProxy = convertToClashProxy(
+          wg,
+          wgProxyName,
+          profile.wgMtu,
+          dnsList
+        );
+        const items = [{
+          wgProxy,
+          groupName,
+          includeDirect: profile.includeDirect !== false
+        }];
+        finalConfig = appendMultipleWireGuardProfiles(
+          baseConfig,
+          items,
+          appConfig.prependRules || []
+        );
+      }
+    }
     
     // 重新排序配置，确保基础配置在前
     finalConfig = reorderConfigKeys(finalConfig);
@@ -609,9 +723,7 @@ app.get('/', (req, res) => {
       config: {
         config_urls: appConfig.configUrls,
         conf_dir: CONF_DIR,
-        mtu: appConfig.wgMtu,
-        dns: appConfig.wgDns,
-        group_name: appConfig.wgGroupName
+        wg_profiles: appConfig.wgProfiles
       }
     });
   }
@@ -630,9 +742,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('\n当前配置:');
   console.log(`  - 订阅源: ${appConfig.configUrls.length > 0 ? appConfig.configUrls.length + ' 个' : '未配置'}`);
   console.log(`  - CONF_DIR: ${CONF_DIR}`);
-  console.log(`  - WG_MTU: ${appConfig.wgMtu}`);
-  console.log(`  - WG_DNS: ${appConfig.wgDns.join(', ')}`);
-  console.log(`  - WG_GROUP_NAME: ${appConfig.wgGroupName}`);
+  const wgN = Array.isArray(appConfig.wgProfiles) ? appConfig.wgProfiles.length : 0;
+  console.log(`  - WireGuard 配置组: ${wgN} 组`);
   console.log('========================================\n');
 });
 

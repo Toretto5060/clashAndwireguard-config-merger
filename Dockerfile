@@ -1,5 +1,8 @@
 FROM node:18-alpine
 
+# add-client.sh / delete-client.sh 需在容器内调用 wg，与宿主机共享网络命名空间时可操作宿主机上的 WireGuard 接口
+RUN apk add --no-cache wireguard-tools 
+
 # 设置工作目录
 WORKDIR /app
 
@@ -12,8 +15,8 @@ RUN npm install --production
 # 复制应用代码
 COPY . .
 
-# 创建数据目录（用于存储配置文件）
-RUN mkdir -p /app/data
+# 创建数据目录与脚本目录
+RUN mkdir -p /app/data /app/script && chmod +x /app/script/*.sh 2>/dev/null || true
 
 # 暴露端口
 EXPOSE 3000

@@ -129,6 +129,23 @@ function revokeToken(token) {
 }
 
 /**
+ * 删除token记录（从文件中彻底移除）
+ * @param {string} token - token字符串
+ * @returns {boolean} 是否删除成功
+ */
+function removeToken(token) {
+  const tokens = loadTokens();
+  const index = tokens.findIndex(t => t.token === token);
+  if (index === -1) {
+    return false;
+  }
+  tokens.splice(index, 1);
+  saveTokens(tokens);
+  console.log(`Token记录已删除: ${token}`);
+  return true;
+}
+
+/**
  * 获取配置的token
  * @param {string} configName - 配置文件名
  * @returns {object|null} token对象
@@ -150,6 +167,7 @@ module.exports = {
   createToken,
   validateToken,
   revokeToken,
+  removeToken,
   getTokenByConfig,
   getAllTokens
 };

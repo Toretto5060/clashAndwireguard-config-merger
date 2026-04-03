@@ -242,11 +242,72 @@ function appendWireGuardConfig(config, wgProxy, groupName, rules) {
   return newConfig;
 }
 
+/**
+ * 追加多组 WireGuard：每组一个代理节点 + 一个 select 代理组；规则共用 prependRules
+ * @param {object[]} items - { wgProxy, groupName, includeDirect }
+ */
+function appendMultipleWireGuardProfiles(config, items, prependRules) {
+  const newConfig = JSON.parse(JSON.stringify(config));
+  const DIRECT_LABEL = '直连';
+
+  if (!newConfig.proxies) newConfig.proxies = [];
+  if (!newConfig['proxy-groups']) newConfig['proxy-groups'] = [];
+  if (!newConfig.rules) newConfig.rules = [];
+
+  // 用中文“直连”展示，但底层仍通过 DIRECT 实现
+  const directAliasGroupExists = newConfig['proxy-groups'].some(g => g && g.name === DIRECT_LABEL);
+  if (!directAliasGroupExists) {
+    newConfig['proxy-groups'].push({
+      name: DIRECT_LABEL,
+      type: 'select',
+      proxies: ['DIRECT']
+    });
+  }
+
+  for (const item of items) {
+    const { wgProxy, groupName, includeDirect } = item;
+    newConfig.proxies.push(wgProxy);
+
+    // 若基础配置中已存在同名代理组，则向其追加 WireGuard 节点，避免创建重复组导致 Clash 回环检测
+    const existingGroup = newConfig['proxy-groups'].find(g => g && g.name === groupName);
+    if (existingGroup) {
+      if (!Array.isArray(existingGroup.proxies)) {
+        existingGroup.proxies = [];
+      }
+      // 固定顺序：DIRECT 在前，WG 在后
+      if (includeDirect && !existingGroup.proxies.includes(DIRECT_LABEL)) {
+        existingGroup.proxies.unshift(DIRECT_LABEL);
+      }
+      if (!existingGroup.proxies.includes(wgProxy.name)) {
+        existingGroup.proxies.push(wgProxy.name);
+      }
+      const directIndex = existingGroup.proxies.indexOf(DIRECT_LABEL);
+      const wgIndex = existingGroup.proxies.indexOf(wgProxy.name);
+      if (directIndex !== -1 && wgIndex !== -1 && directIndex > wgIndex) {
+        existingGroup.proxies.splice(directIndex, 1);
+        const newWgIndex = existingGroup.proxies.indexOf(wgProxy.name);
+        existingGroup.proxies.splice(newWgIndex, 0, DIRECT_LABEL);
+      }
+    } else {
+      const proxies = includeDirect ? [DIRECT_LABEL, wgProxy.name] : [wgProxy.name];
+      newConfig['proxy-groups'].unshift({
+        name: groupName,
+        type: 'select',
+        proxies
+      });
+    }
+  }
+  newConfig.rules.unshift(...prependRules);
+
+  return newConfig;
+}
+
 module.exports = {
   fetchConfig,
   fetchAndMergeConfigs,
   mergeConfigs,
   createEmptyConfig,
-  appendWireGuardConfig
+  appendWireGuardConfig,
+  appendMultipleWireGuardProfiles
 };
 
