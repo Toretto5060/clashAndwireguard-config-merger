@@ -79,7 +79,7 @@ chmod +x build.sh
 # 或手动构建
 docker buildx build --platform linux/amd64,linux/arm64 -t toretto5060/clashandwireguard-config-merger:latest --push .
 
-docker buildx build --platform linux/amd64,linux/arm64 -t toretto5060/clashandwireguard-config-merger:v1.0.02 -t toretto5060/clashandwireguard-config-merger:latest --push .
+docker buildx build --platform linux/amd64,linux/arm64 -t toretto5060/clashandwireguard-config-merger:v1.0.03 -t toretto5060/clashandwireguard-config-merger:latest --push .
 ```
 
 ### 3. 运行容器
