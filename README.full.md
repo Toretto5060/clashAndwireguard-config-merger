@@ -80,6 +80,13 @@ chmod +x build.sh
 docker buildx build --platform linux/amd64,linux/arm64 -t toretto5060/clashandwireguard-config-merger:latest --push .
 
 docker buildx build --platform linux/amd64,linux/arm64 -t toretto5060/clashandwireguard-config-merger:v1.0.03 -t toretto5060/clashandwireguard-config-merger:latest --push .
+
+```
+
+```bash
+feat: 新增登录功能
+fix: 修复支付失败问题
+docs: 更新README
 ```
 
 ### 3. 运行容器
