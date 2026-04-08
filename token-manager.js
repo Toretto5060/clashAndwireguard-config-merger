@@ -83,7 +83,11 @@ function createToken(configName) {
     /** 是否合并左侧「路由规则」；缺省为 true（兼容旧数据） */
     useRules: true,
     /** 是否注入 WireGuard 节点与左侧代理组；缺省为 true */
-    useWireGuard: true
+    useWireGuard: true,
+    /** 仅对当前客户端生效的自定义路由规则（每行一条） */
+    customRules: [],
+    /** 自定义路由规则插入位置：before=加在全局路由规则上方，after=加在全局路由规则下方 */
+    customRulesPosition: 'after'
   };
   
   tokens.push(tokenObj);
@@ -206,6 +210,14 @@ function updateTokenOptions(tokenStr, opts) {
   }
   if (typeof opts.useWireGuard === 'boolean') {
     tokenObj.useWireGuard = opts.useWireGuard;
+  }
+  if (Array.isArray(opts.customRules)) {
+    tokenObj.customRules = opts.customRules
+      .map(s => String(s).trim())
+      .filter(Boolean);
+  }
+  if (opts.customRulesPosition === 'before' || opts.customRulesPosition === 'after') {
+    tokenObj.customRulesPosition = opts.customRulesPosition;
   }
   if (!saveTokens(tokens)) {
     return null;

@@ -199,6 +199,24 @@ function formatZhCommentTime(ms) {
   return new Date(ms).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 }
 
+function maskUrlForUi(url) {
+  if (!url || typeof url !== 'string') return url || '';
+  if (url.length < 20) return url;
+  const protocolEnd = url.indexOf('://');
+  if (protocolEnd === -1) {
+    if (url.length <= 10) return url;
+    const a = url.slice(0, 5);
+    const b = url.slice(-5);
+    return `${a}${'*'.repeat(Math.min(30, url.length - 10))}${b}`;
+  }
+  const protocol = url.slice(0, protocolEnd + 3);
+  const rest = url.slice(protocolEnd + 3);
+  if (rest.length <= 10) return url;
+  const visibleStart = rest.slice(0, 5);
+  const visibleEnd = rest.slice(-5);
+  return `${protocol}${visibleStart}${'*'.repeat(Math.min(30, rest.length - 10))}${visibleEnd}`;
+}
+
 /**
  * 生成订阅信息 YAML 注释（含拉取状态、时间、打码 URL）
  * @param {Array} allSubscriptionInfos
@@ -417,7 +435,18 @@ app.post('/api/auth/logout', (req, res) => {
 
 // 配置管理API - 获取配置
 app.get('/api/config', requireAuth, (req, res) => {
-  res.json(appConfig);
+  res.json({
+    ...appConfig,
+    // 不返回明文订阅源地址：默认只下发打码后的
+    configUrls: (appConfig.configUrls || []).map(maskUrlForUi)
+  });
+});
+
+// 获取订阅源明文（仅在点“眼睛”时按需拉取）
+app.get('/api/config/reveal-urls', requireAuth, (req, res) => {
+  res.json({
+    configUrls: appConfig.configUrls || []
+  });
 });
 
 // 配置管理API - 保存配置
@@ -557,12 +586,40 @@ app.get('/api/tokens', requireAuth, (req, res) => {
     const protocol = req.protocol;
     const host = req.get('host');
     
-    const tokensWithUrl = tokens.map(t => ({
-      ...t,
-      subscriptionUrl: `${protocol}://${host}/config/${t.configName}/${t.token}`
-    }));
+    const tokensWithUrl = tokens.map(t => {
+      const full = `${protocol}://${host}/config/${t.configName}/${t.token}`;
+      const isActive = t.active !== false;
+      return {
+        ...t,
+        // 默认不返回未失效订阅的明文 URL
+        subscriptionUrl: isActive ? undefined : full,
+        subscriptionUrlMasked: isActive ? maskUrlForUi(full) : undefined
+      };
+    });
     
     res.json(tokensWithUrl);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 按需获取某个订阅 token 的明文链接（用于“眼睛/复制”）
+app.get('/api/tokens/:token/url', requireAuth, (req, res) => {
+  try {
+    const { token } = req.params;
+    const all = getAllTokens();
+    const t = all.find(x => x.token === token);
+    if (!t) {
+      return res.status(404).json({ error: 'Token不存在' });
+    }
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const full = `${protocol}://${host}/config/${t.configName}/${t.token}`;
+    res.json({
+      token: t.token,
+      active: t.active !== false,
+      subscriptionUrl: full
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -580,8 +637,14 @@ app.patch('/api/tokens/:token', requireAuth, (req, res) => {
     if (typeof body.useWireGuard === 'boolean') {
       patch.useWireGuard = body.useWireGuard;
     }
+    if (Array.isArray(body.customRules)) {
+      patch.customRules = body.customRules;
+    }
+    if (body.customRulesPosition === 'before' || body.customRulesPosition === 'after') {
+      patch.customRulesPosition = body.customRulesPosition;
+    }
     if (Object.keys(patch).length === 0) {
-      return res.status(400).json({ error: '请提供 useRules 或 useWireGuard（布尔值）' });
+      return res.status(400).json({ error: '请提供 useRules/useWireGuard/customRules/customRulesPosition' });
     }
     const all = getAllTokens();
     const existing = all.find(t => t.token === token);
@@ -590,6 +653,11 @@ app.patch('/api/tokens/:token', requireAuth, (req, res) => {
     }
     if (existing.active === false) {
       return res.status(400).json({ error: '已失效的订阅无法修改选项' });
+    }
+    if (patch.customRules) {
+      // 允许保存空数组：用于清空/删除该客户端的自定义路由规则
+      const cleaned = patch.customRules.map(s => String(s).trim()).filter(Boolean);
+      patch.customRules = cleaned;
     }
     const updated = updateTokenOptions(token, patch);
     if (!updated) {
@@ -600,7 +668,9 @@ app.patch('/api/tokens/:token', requireAuth, (req, res) => {
       token: updated.token,
       configName: updated.configName,
       useRules: updated.useRules !== false,
-      useWireGuard: updated.useWireGuard !== false
+      useWireGuard: updated.useWireGuard !== false,
+      customRules: Array.isArray(updated.customRules) ? updated.customRules : [],
+      customRulesPosition: updated.customRulesPosition === 'before' ? 'before' : 'after'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -778,7 +848,16 @@ app.get('/config/:configName/:token', async (req, res) => {
 
     const useRules = tokenObj.useRules !== false;
     const useWireGuard = tokenObj.useWireGuard !== false;
-    const prependRules = useRules ? (appConfig.prependRules || []) : [];
+    const globalRules = useRules ? (appConfig.prependRules || []) : [];
+    const customRules = useRules && Array.isArray(tokenObj.customRules)
+      ? tokenObj.customRules.map(s => String(s).trim()).filter(Boolean)
+      : [];
+    const customPos = tokenObj.customRulesPosition === 'before' ? 'before' : 'after';
+    const prependRules = useRules
+      ? (customPos === 'before'
+        ? [...customRules, ...globalRules]
+        : [...globalRules, ...customRules])
+      : [];
 
     function baseConfigWithOptionalPrependRules() {
       const cfg = JSON.parse(JSON.stringify(baseConfig));

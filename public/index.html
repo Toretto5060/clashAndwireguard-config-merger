@@ -463,6 +463,85 @@
             cursor: not-allowed;
         }
 
+        .btn-inline {
+            padding: 6px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            background: #f8f9fa;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .btn-inline:hover:not(:disabled) {
+            background: #eef1f4;
+        }
+
+        .btn-inline:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-custom-rules {
+            position: relative;
+        }
+
+        .custom-rule-dot {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #dc3545;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+
+        .custom-rule-modal-body {
+            padding: 14px;
+        }
+
+        .custom-rule-modal-body textarea {
+            width: 100%;
+            min-height: 180px;
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .custom-rule-modal-actions {
+            display: flex;
+            gap: 10px;
+            padding: 12px 14px 14px;
+            border-top: 1px solid #e0e0e0;
+            background: #fafafa;
+        }
+
+        .custom-rule-modal-actions .btn {
+            flex: 1;
+        }
+
+        .custom-rule-position {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            margin: 10px 0 8px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .custom-rule-position label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .custom-rule-position input[type="radio"] {
+            width: auto;
+        }
+
         .subscription-status {
             padding: 4px 12px;
             border-radius: 12px;
@@ -820,6 +899,7 @@
         }
 
         let availableConfigsList = [];
+        let tokenIndex = new Map();
 
         function genWgId() {
             return 'wg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
@@ -1006,7 +1086,7 @@
                 // 填充订阅源地址
                 const urlList = document.getElementById('urlList');
                 urlList.innerHTML = '';
-                config.configUrls.forEach(url => addUrlInput(url));
+                config.configUrls.forEach((url, idx) => addUrlInput(url, idx));
 
                 renderWgProfilesFromConfig(config.wgProfiles);
                 document.getElementById('prependRules').value = config.prependRules.join('\n');
@@ -1053,9 +1133,25 @@
             event.preventDefault();
 
             const urlInputs = document.querySelectorAll('.url-item input');
+            // 若后端只返回打码值，这里保存前确保能拿到明文
+            const missing = Array.from(urlInputs).some(i => i.classList.contains('masked') && !i.dataset.realValue);
+            if (missing) {
+                await revealConfigUrlsOnce();
+                // 尽力补齐 realValue
+                Array.from(urlInputs).forEach(i => {
+                    if (!i.classList.contains('masked') || i.dataset.realValue) return;
+                    const idx = parseInt(i.dataset.urlIndex || '', 10);
+                    if (!Number.isNaN(idx) && revealedConfigUrlsCache && revealedConfigUrlsCache[idx]) {
+                        i.dataset.realValue = revealedConfigUrlsCache[idx];
+                        return;
+                    }
+                    const hit = (revealedConfigUrlsCache || []).find(u => maskUrl(u) === i.value);
+                    if (hit) i.dataset.realValue = hit;
+                });
+            }
+
             const configUrls = Array.from(urlInputs)
                 .map(input => {
-                    // 如果是脱敏状态，使用真实值
                     if (input.classList.contains('masked') && input.dataset.realValue) {
                         return input.dataset.realValue.trim();
                     }
@@ -1118,7 +1214,7 @@
             return `${protocol}${visibleStart}${'*'.repeat(Math.min(30, rest.length - 10))}${visibleEnd}`;
         }
 
-        function addUrlInput(value = '') {
+        function addUrlInput(value = '', urlIndex = null) {
             const urlList = document.getElementById('urlList');
             const urlItem = document.createElement('div');
             urlItem.className = 'url-item';
@@ -1130,11 +1226,15 @@
             const input = document.createElement('input');
             input.type = 'text';
             input.placeholder = 'https://example.com/clash/config';
-            input.dataset.realValue = value; // 存储真实值
+            // 后端默认下发打码值：此处不要把 realValue 设为 value（否则点眼睛不会去拉明文）
+            input.dataset.realValue = '';
+            if (typeof urlIndex === 'number') {
+                input.dataset.urlIndex = String(urlIndex);
+            }
             
             // 如果有值，初始显示为脱敏状态
             if (value) {
-                input.value = maskUrl(value);
+                input.value = value;
                 input.classList.add('masked');
                 input.readOnly = true;
             }
@@ -1162,9 +1262,39 @@
         }
 
         // 切换URL显示/隐藏
-        function toggleUrlVisibility(input, eyeBtn) {
+        let revealedConfigUrlsCache = null;
+        async function revealConfigUrlsOnce() {
+            if (revealedConfigUrlsCache) return revealedConfigUrlsCache;
+            const resp = await fetch('/api/config/reveal-urls', { headers: getAuthHeaders() });
+            if (handleAuthError(resp)) return null;
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            revealedConfigUrlsCache = (data && data.configUrls) || [];
+            return revealedConfigUrlsCache;
+        }
+
+        async function toggleUrlVisibility(input, eyeBtn) {
             if (input.classList.contains('masked')) {
-                // 显示完整地址
+                // 显示完整地址：如没有 realValue，则向后端按需拉取一次
+                if (!input.dataset.realValue) {
+                    const arr = await revealConfigUrlsOnce();
+                    if (!arr) {
+                        showToast('获取明文订阅源失败', 'error');
+                        return;
+                    }
+                    // 优先按索引绑定（最稳定），否则尝试按打码值匹配
+                    const i = parseInt(input.dataset.urlIndex || '', 10);
+                    if (!Number.isNaN(i) && i >= 0 && i < arr.length) {
+                        input.dataset.realValue = arr[i];
+                    } else {
+                        const idx = arr.findIndex(u => maskUrl(u) === input.value);
+                        if (idx >= 0) {
+                            input.dataset.realValue = arr[idx];
+                        } else if (arr.length === 1) {
+                            input.dataset.realValue = arr[0];
+                        }
+                    }
+                }
                 input.value = input.dataset.realValue || input.value;
                 input.classList.remove('masked');
                 input.readOnly = false;
@@ -1498,6 +1628,8 @@
                     return timeB - timeA;
                 });
                 
+                tokenIndex = new Map(sortedTokens.map(t => [t.token, t]));
+
                 listContainer.innerHTML = sortedTokens.map(token => {
                     const isActive = token.active !== false;
                     const statusClass = isActive ? 'status-active' : 'status-inactive';
@@ -1506,6 +1638,8 @@
                     const itemClass = isActive ? '' : ' inactive';
                     const useRules = token.useRules !== false;
                     const useWireGuard = token.useWireGuard !== false;
+                    const customRules = Array.isArray(token.customRules) ? token.customRules : [];
+                    const hasCustom = customRules.length > 0;
                     const dis = isActive ? '' : 'disabled';
                     const lblClass = isActive ? '' : 'token-flag-disabled';
                     
@@ -1516,10 +1650,18 @@
                             <div class="subscription-flags">
                                 <label class="${lblClass}"><input type="checkbox" class="token-opt-wg" data-token="${escapeHtml(token.token)}" ${useWireGuard ? 'checked' : ''} ${dis}> WireGuard</label>
                                 <label class="${lblClass}"><input type="checkbox" class="token-opt-rules" data-token="${escapeHtml(token.token)}" ${useRules ? 'checked' : ''} ${dis}> 全局路由</label>
+                                <button type="button" class="btn-inline btn-custom-rules" data-token="${escapeHtml(token.token)}" ${isActive ? '' : 'disabled'}>
+                                    自定义路由${hasCustom ? '<span class="custom-rule-dot" title="已设置自定义路由"></span>' : ''}
+                                </button>
                             </div>
                             <span class="subscription-status ${statusClass}">${statusText}</span>
                         </div>
-                        <div class="subscription-url">${escapeHtml(token.subscriptionUrl)}</div>
+                        <div class="subscription-url">
+                            <span class="sub-url-text">${escapeHtml(isActive ? (token.subscriptionUrlMasked || '') : (token.subscriptionUrl || ''))}</span>
+                            ${isActive ? `
+                                <button type="button" class="btn-eye btn-sub-url-eye" data-token="${escapeHtml(token.token)}" style="position: static; margin-left: 8px;" title="显示/隐藏完整地址">👁️</button>
+                            ` : ''}
+                        </div>
                         <div class="subscription-meta">
                             <div>🕒 创建: ${new Date(token.createdAt).toLocaleString('zh-CN')}</div>
                             <div>📊 使用: ${token.usageCount || 0} 次</div>
@@ -1527,7 +1669,7 @@
                         </div>
                         <div class="subscription-actions">
                             ${isActive ? `
-                                <button type="button" class="btn btn-copy btn-small" onclick='copySubscriptionUrl(${JSON.stringify(token.subscriptionUrl)})'>
+                                <button type="button" class="btn btn-copy btn-small" onclick='copySubscriptionUrl(${JSON.stringify(token.token)})'>
                                     📋 复制链接
                                 </button>
                                 <button type="button" class="btn btn-danger btn-small" onclick="revokeSubscription('${token.token}')">
@@ -1577,8 +1719,101 @@
             }
         }
 
-        // 复制订阅 URL
-        function copySubscriptionUrl(url) {
+        function openCustomRulesModal(tokenStr) {
+            const t = tokenIndex.get(tokenStr);
+            if (!t) {
+                showToast('找不到该订阅记录，请刷新列表', 'error');
+                return;
+            }
+            if (t.active === false) {
+                showToast('已失效的订阅不可编辑自定义路由', 'error');
+                return;
+            }
+
+            const backdrop = document.getElementById('customRuleModal');
+            const titleEl = document.getElementById('customRuleModalTitle');
+            const tokenEl = document.getElementById('customRuleModalToken');
+            const textEl = document.getElementById('customRuleTextarea');
+            const saveBtn = document.getElementById('customRuleSaveBtn');
+            const posBefore = document.getElementById('customRulePosBefore');
+            const posAfter = document.getElementById('customRulePosAfter');
+
+            titleEl.textContent = `自定义路由 - ${t.configName}`;
+            tokenEl.textContent = t.token;
+
+            const rules = Array.isArray(t.customRules) ? t.customRules : [];
+            textEl.value = rules.join('\n');
+
+            const pos = t.customRulesPosition === 'before' ? 'before' : 'after';
+            if (pos === 'before') posBefore.checked = true;
+            else posAfter.checked = true;
+
+            const originallyHadRules = Array.isArray(t.customRules) && t.customRules.length > 0;
+
+            function syncSaveState() {
+                const has = textEl.value.split('\n').map(s => s.trim()).filter(Boolean).length > 0;
+                // 允许保存空规则：当原来已设置过规则、现在清空时，用于“删除自定义规则”
+                saveBtn.disabled = !(has || originallyHadRules);
+            }
+            textEl.oninput = syncSaveState;
+            syncSaveState();
+
+            saveBtn.onclick = async function() {
+                const rulesArr = textEl.value
+                    .split('\n')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                const chosenPos = posBefore.checked ? 'before' : 'after';
+                saveBtn.disabled = true;
+                try {
+                    const resp = await fetch('/api/tokens/' + encodeURIComponent(tokenStr), {
+                        method: 'PATCH',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({
+                            customRules: rulesArr,
+                            customRulesPosition: chosenPos
+                        })
+                    });
+                    if (handleAuthError(resp)) return;
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({}));
+                        throw new Error(err.error || err.message || '保存失败');
+                    }
+                    showToast('自定义路由已保存', 'success');
+                    closeCustomRulesModal();
+                    await loadSubscriptions();
+                } catch (e) {
+                    showToast(e.message || '保存失败', 'error');
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            };
+
+            backdrop.style.display = 'flex';
+        }
+
+        function closeCustomRulesModal() {
+            const backdrop = document.getElementById('customRuleModal');
+            if (backdrop) backdrop.style.display = 'none';
+        }
+
+        async function revealSubscriptionUrl(tokenStr) {
+            const resp = await fetch('/api/tokens/' + encodeURIComponent(tokenStr) + '/url', {
+                headers: getAuthHeaders()
+            });
+            if (handleAuthError(resp)) return null;
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            return data && data.subscriptionUrl ? String(data.subscriptionUrl) : null;
+        }
+
+        // 复制订阅 URL（复制的一定是明文）
+        async function copySubscriptionUrl(tokenStr) {
+            const url = await revealSubscriptionUrl(tokenStr);
+            if (!url) {
+                showToast('获取明文订阅链接失败', 'error');
+                return;
+            }
             navigator.clipboard.writeText(url).then(() => {
                 showToast('订阅链接已复制到剪贴板', 'info');
             }).catch(() => {
@@ -1664,6 +1899,46 @@
                 patchSubscriptionTokenOptions(tokenStr, rulesCb.checked, wgCb.checked, t);
             });
 
+            document.getElementById('subscriptionList').addEventListener('click', function(e) {
+                const btn = e.target.closest('.btn-custom-rules');
+                if (!btn) return;
+                const tokenStr = btn.dataset.token;
+                if (!tokenStr) return;
+                openCustomRulesModal(tokenStr);
+            });
+
+            document.getElementById('subscriptionList').addEventListener('click', async function(e) {
+                const eye = e.target.closest('.btn-sub-url-eye');
+                if (!eye) return;
+                const tokenStr = eye.dataset.token;
+                if (!tokenStr) return;
+                const row = eye.closest('.subscription-item');
+                if (!row) return;
+                const textEl = row.querySelector('.sub-url-text');
+                if (!textEl) return;
+
+                // 还原为打码
+                if (eye.dataset.revealed === '1') {
+                    const t = tokenIndex.get(tokenStr);
+                    textEl.textContent = (t && t.subscriptionUrlMasked) ? t.subscriptionUrlMasked : textEl.textContent;
+                    eye.innerHTML = '👁️';
+                    eye.title = '显示完整地址';
+                    eye.dataset.revealed = '0';
+                    return;
+                }
+
+                // 请求明文
+                const url = await revealSubscriptionUrl(tokenStr);
+                if (!url) {
+                    showToast('获取明文订阅链接失败', 'error');
+                    return;
+                }
+                textEl.textContent = url;
+                eye.innerHTML = '🙈';
+                eye.title = '隐藏地址';
+                eye.dataset.revealed = '1';
+            });
+
             await loadConfigSelect();
             await loadConfig(false);
             loadSubscriptions();
@@ -1690,6 +1965,31 @@
             </div>
             <div class="script-modal-body">
                 <pre id="scriptModalBody"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div id="customRuleModal" class="script-modal-backdrop">
+        <div class="script-modal">
+            <div class="script-modal-header">
+                <span id="customRuleModalTitle">自定义路由</span>
+                <button type="button" onclick="closeCustomRulesModal()">×</button>
+            </div>
+            <div class="custom-rule-modal-body">
+                <div class="help-text" style="margin-bottom:8px;">
+                    仅对当前客户端生效；每行一条规则；将按所选位置插入到「全局路由规则」上方/下方。<br>
+                    Token: <code id="customRuleModalToken"></code>
+                </div>
+                <div class="custom-rule-position">
+                    <label><input type="radio" name="customRulePos" id="customRulePosBefore" value="before"> 添加在全局路由上方</label>
+                    <label><input type="radio" name="customRulePos" id="customRulePosAfter" value="after" checked> 添加在全局路由下方</label>
+                </div>
+                <textarea id="customRuleTextarea" placeholder="每行一条规则"></textarea>
+                <div class="help-text" style="margin-top:6px;">规则为空时不可保存</div>
+            </div>
+            <div class="custom-rule-modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeCustomRulesModal()">取消</button>
+                <button type="button" class="btn btn-primary" id="customRuleSaveBtn" disabled>保存</button>
             </div>
         </div>
     </div>
