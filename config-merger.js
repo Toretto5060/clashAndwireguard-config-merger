@@ -127,19 +127,25 @@ async function fetchAndMergeConfigs(urls) {
   
   if (configs.length === 0) {
     console.warn('没有成功拉取任何配置');
-    return { config: createEmptyConfig(), subscriptionInfo: null, allSubscriptionInfos: [] };
+    return {
+      config: createEmptyConfig(),
+      subscriptionInfo: null,
+      allSubscriptionInfos: [],
+      remoteFetchOk: false
+    };
   }
-  
+
   // 合并配置
   const mergedConfig = mergeConfigs(configs);
-  
+
   // 第一个订阅源用于响应头
   const firstSubscriptionInfo = allSubscriptionInfos.length > 0 ? allSubscriptionInfos[0] : null;
-  
-  return { 
-    config: mergedConfig, 
+
+  return {
+    config: mergedConfig,
     subscriptionInfo: firstSubscriptionInfo,
-    allSubscriptionInfos: allSubscriptionInfos
+    allSubscriptionInfos: allSubscriptionInfos,
+    remoteFetchOk: true
   };
 }
 

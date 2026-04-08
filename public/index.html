@@ -422,8 +422,10 @@
 
         .subscription-header {
             display: flex;
-            justify-content: space-between;
+            flex-wrap: wrap;
             align-items: center;
+            justify-content: space-between;
+            gap: 10px 14px;
             margin-bottom: 10px;
         }
 
@@ -431,6 +433,34 @@
             font-weight: 600;
             font-size: 16px;
             color: #333;
+        }
+
+        .subscription-flags {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #444;
+        }
+
+        .subscription-flags label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .subscription-flags input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .subscription-flags label.token-flag-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
         }
 
         .subscription-status {
@@ -688,11 +718,11 @@
                             <div id="wgProfilesContainer"></div>
                         </div>
 
-                        <!-- 路由规则 -->
+                        <!-- 全局路由规则 -->
                         <div class="form-group">
-                            <label for="prependRules">路由规则</label>
+                            <label for="prependRules">全局路由规则</label>
                             <textarea id="prependRules" name="prependRules" rows="6" placeholder="每行一条规则（全局共用）。代理组名需与上方某一组「代理组名称」一致，例如：&#10;IP-CIDR,192.168.0.0/16,🏠 Home&#10;IP-CIDR,10.0.0.0/8,🏢 Office"></textarea>
-                            <div class="help-text">自定义路由规则，每行一条；全部 WireGuard 组共用本列表</div>
+                            <div class="help-text">自定义全局路由规则，每行一条；全部 WireGuard 组共用本列表</div>
                         </div>
 
                         <!-- 按钮组 -->
@@ -882,7 +912,7 @@
             gname.dataset.lastName = gname.value;
             const ht4 = document.createElement('div');
             ht4.className = 'help-text';
-            ht4.textContent = '每组名称须唯一；路由规则里填写的策略组名需与此一致';
+            ht4.textContent = '每组名称须唯一；全局路由规则里填写的策略组名需与此一致';
             fg4.appendChild(lb4);
             fg4.appendChild(gname);
             fg4.appendChild(ht4);
@@ -890,9 +920,6 @@
 
             container.appendChild(card);
             fillWgProfileConfigSelects();
-            if (profile.configName) {
-                sel.value = profile.configName;
-            }
         }
 
         function renderWgProfilesFromConfig(profiles) {
@@ -939,6 +966,14 @@
                     t.dataset.lastName = newName;
                 }
             }, true);
+        }
+
+        function escapeHtml(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
 
         // Toast 通知
@@ -1002,6 +1037,7 @@
                 }
                 await loadConfigSelect();
                 await loadConfig(false);
+                await loadSubscriptions();
                 showToast('已重新加载 conf 与配置', 'success');
             } catch (error) {
                 showToast('重新加载失败: ' + error.message, 'error');
@@ -1334,11 +1370,16 @@
                     showScriptOutput('add-client.sh 输出', out);
                     // 刷新 conf 列表 / 删除模式单选
                     await reloadConfFromServer();
-                    // 清空输入框并更新按钮状态
+                    // 清空输入框，操作类型回到「生成订阅」
                     const input = document.getElementById('newClientName');
                     if (input) {
                         input.value = '';
                     }
+                    const genRadio = document.querySelector('input[name="rightPanelMode"][value="generate"]');
+                    if (genRadio) {
+                        genRadio.checked = true;
+                    }
+                    syncRightPanelMode();
                     updateAddClientButtonState();
                 } else {
                     showToast(data.error || data.message || '执行失败', 'error');
@@ -1460,16 +1501,25 @@
                 listContainer.innerHTML = sortedTokens.map(token => {
                     const isActive = token.active !== false;
                     const statusClass = isActive ? 'status-active' : 'status-inactive';
-                    const statusText = isActive ? '✓ 有效' : '✗ 已失效';
+                    const covered = !isActive && token.blankServedAfterRevoke;
+                    const statusText = isActive ? '✓ 有效' : (covered ? '✗ 已失效（已覆盖）' : '✗ 已失效');
                     const itemClass = isActive ? '' : ' inactive';
+                    const useRules = token.useRules !== false;
+                    const useWireGuard = token.useWireGuard !== false;
+                    const dis = isActive ? '' : 'disabled';
+                    const lblClass = isActive ? '' : 'token-flag-disabled';
                     
                     return `
-                    <div class="subscription-item${itemClass}">
+                    <div class="subscription-item${itemClass}" data-sub-token="${escapeHtml(token.token)}">
                         <div class="subscription-header">
-                            <span class="subscription-name">📁 ${token.configName}</span>
+                            <span class="subscription-name">📁 ${escapeHtml(token.configName)}</span>
+                            <div class="subscription-flags">
+                                <label class="${lblClass}"><input type="checkbox" class="token-opt-wg" data-token="${escapeHtml(token.token)}" ${useWireGuard ? 'checked' : ''} ${dis}> WireGuard</label>
+                                <label class="${lblClass}"><input type="checkbox" class="token-opt-rules" data-token="${escapeHtml(token.token)}" ${useRules ? 'checked' : ''} ${dis}> 全局路由</label>
+                            </div>
                             <span class="subscription-status ${statusClass}">${statusText}</span>
                         </div>
-                        <div class="subscription-url">${token.subscriptionUrl}</div>
+                        <div class="subscription-url">${escapeHtml(token.subscriptionUrl)}</div>
                         <div class="subscription-meta">
                             <div>🕒 创建: ${new Date(token.createdAt).toLocaleString('zh-CN')}</div>
                             <div>📊 使用: ${token.usageCount || 0} 次</div>
@@ -1477,17 +1527,17 @@
                         </div>
                         <div class="subscription-actions">
                             ${isActive ? `
-                                <button class="btn btn-copy btn-small" onclick="copySubscriptionUrl('${token.subscriptionUrl}')">
+                                <button type="button" class="btn btn-copy btn-small" onclick='copySubscriptionUrl(${JSON.stringify(token.subscriptionUrl)})'>
                                     📋 复制链接
                                 </button>
-                                <button class="btn btn-danger btn-small" onclick="revokeSubscription('${token.token}')">
+                                <button type="button" class="btn btn-danger btn-small" onclick="revokeSubscription('${token.token}')">
                                     ❌ 失效
                                 </button>
                             ` : `
                                 <button class="btn btn-secondary btn-small" disabled>
-                                    已失效
+                                    已失效${covered ? '（已覆盖）' : ''}
                                 </button>
-                                <button class="btn btn-danger btn-small" onclick="deleteInactiveSubscription('${token.token}')">
+                                <button type="button" class="btn btn-danger btn-small" onclick="deleteInactiveSubscription('${token.token}')">
                                     🗑 删除记录
                                 </button>
                             `}
@@ -1497,6 +1547,33 @@
                 }).join('');
             } catch (error) {
                 showToast('加载订阅列表失败: ' + error.message, 'error');
+            }
+        }
+
+        async function patchSubscriptionTokenOptions(tokenStr, rulesChecked, wgChecked, revertCheckbox) {
+            try {
+                const response = await fetch('/api/tokens/' + encodeURIComponent(tokenStr), {
+                    method: 'PATCH',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        useRules: rulesChecked,
+                        useWireGuard: wgChecked
+                    })
+                });
+                if (handleAuthError(response)) {
+                    if (revertCheckbox) revertCheckbox.checked = !revertCheckbox.checked;
+                    return;
+                }
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || err.message || '更新失败');
+                }
+                showToast('订阅选项已保存', 'success');
+            } catch (e) {
+                if (revertCheckbox) {
+                    revertCheckbox.checked = !revertCheckbox.checked;
+                }
+                showToast(e.message || '更新失败', 'error');
             }
         }
 
@@ -1573,6 +1650,19 @@
             }
             syncRightPanelMode();
             updateAddClientButtonState();
+
+            document.getElementById('subscriptionList').addEventListener('change', function(e) {
+                const t = e.target;
+                if (!t.matches('.token-opt-rules, .token-opt-wg')) return;
+                const row = t.closest('.subscription-item');
+                if (!row) return;
+                const rulesCb = row.querySelector('.token-opt-rules');
+                const wgCb = row.querySelector('.token-opt-wg');
+                if (!rulesCb || !wgCb || rulesCb.disabled) return;
+                const tokenStr = t.dataset.token;
+                if (!tokenStr) return;
+                patchSubscriptionTokenOptions(tokenStr, rulesCb.checked, wgCb.checked, t);
+            });
 
             await loadConfigSelect();
             await loadConfig(false);

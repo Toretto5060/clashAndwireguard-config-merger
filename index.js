@@ -4,9 +4,24 @@ const { execFile } = require('child_process');
 const path = require('path');
 const yaml = require('js-yaml');
 const { loadAllWireGuardConfigs, convertToClashProxy } = require('./wireguard-parser');
-const { fetchAndMergeConfigs, appendMultipleWireGuardProfiles } = require('./config-merger');
+const {
+  fetchAndMergeConfigs,
+  appendMultipleWireGuardProfiles,
+  createEmptyConfig
+} = require('./config-merger');
+const { readStaleRemoteCache, writeRemoteCacheSuccess } = require('./remote-subscription-cache');
 const { loadConfig, saveConfig, validateConfig } = require('./config-manager');
-const { createToken, validateToken, revokeToken, removeToken, getTokenByConfig, getAllTokens } = require('./token-manager');
+const {
+  createToken,
+  getTokenRecord,
+  incrementTokenUsage,
+  markBlankTemplateServedAfterRevoke,
+  revokeToken,
+  removeToken,
+  updateTokenOptions,
+  getTokenByConfig,
+  getAllTokens
+} = require('./token-manager');
 const { 
   isIPLocked, 
   recordLoginFailure, 
@@ -160,33 +175,85 @@ function formatSubscriptionHeader(info) {
   return parts.join('; ');
 }
 
+/** 与左侧 Web 订阅源脱敏规则一致（中间打星） */
+function maskSubscriptionUrlForComment(url) {
+  if (!url || typeof url !== 'string') return url || '';
+  if (url.length < 20) return url;
+  const protocolEnd = url.indexOf('://');
+  if (protocolEnd === -1) {
+    if (url.length <= 10) return url;
+    const a = url.slice(0, 5);
+    const b = url.slice(-5);
+    return `${a}${'*'.repeat(Math.min(30, url.length - 10))}${b}`;
+  }
+  const protocol = url.slice(0, protocolEnd + 3);
+  const rest = url.slice(protocolEnd + 3);
+  if (rest.length <= 10) return url;
+  const visibleStart = rest.slice(0, 5);
+  const visibleEnd = rest.slice(-5);
+  return `${protocol}${visibleStart}${'*'.repeat(Math.min(30, rest.length - 10))}${visibleEnd}`;
+}
+
+function formatZhCommentTime(ms) {
+  if (ms == null || Number.isNaN(ms)) return '—';
+  return new Date(ms).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+}
+
 /**
- * 生成所有订阅源信息的 YAML 注释
+ * 生成订阅信息 YAML 注释（含拉取状态、时间、打码 URL）
+ * @param {Array} allSubscriptionInfos
+ * @param {{ remoteFetchOk: boolean, usedStaleRemote: boolean, subscriptionDataUpdatedAt: number|null, lastAttemptAt: number }} meta
  */
-function generateAllSubscriptionComment(allSubscriptionInfos) {
+function generateAllSubscriptionComment(allSubscriptionInfos, meta) {
   const lines = [];
+  const {
+    remoteFetchOk,
+    usedStaleRemote,
+    subscriptionDataUpdatedAt,
+    lastAttemptAt
+  } = meta;
+
   lines.push('# ========================================');
   lines.push('# 订阅信息');
   lines.push('# ========================================');
-  
-  allSubscriptionInfos.forEach((info, index) => {
-    lines.push(`# 订阅源 ${index + 1}: ${info.url}`);
-    
+
+  if (remoteFetchOk) {
+    lines.push('# 远程订阅拉取: 成功');
+  } else if (usedStaleRemote) {
+    lines.push('# 远程订阅拉取: 失败（已使用上次成功拉取的订阅合并结果）');
+  } else {
+    lines.push('# 远程订阅拉取: 失败（无可用缓存）');
+  }
+
+  if (subscriptionDataUpdatedAt != null) {
+    const suffix =
+      !remoteFetchOk && usedStaleRemote ? '（本次拉取失败，未更新）' : '';
+    lines.push(`# 订阅源数据更新时间: ${formatZhCommentTime(subscriptionDataUpdatedAt)}${suffix}`);
+  } else {
+    lines.push('# 订阅源数据更新时间: —');
+  }
+
+  lines.push(`# 最近拉取尝试: ${formatZhCommentTime(lastAttemptAt)}`);
+
+  (allSubscriptionInfos || []).forEach((info, index) => {
+    const masked = maskSubscriptionUrlForComment(info.url);
+    lines.push(`# 订阅源 ${index + 1}: ${masked}`);
+
     if (info.uploadFormatted) lines.push(`#   上传流量: ${info.uploadFormatted}`);
     if (info.downloadFormatted) lines.push(`#   下载流量: ${info.downloadFormatted}`);
     if (info.usedFormatted) lines.push(`#   已用流量: ${info.usedFormatted}`);
     if (info.totalFormatted) lines.push(`#   总流量: ${info.totalFormatted}`);
     if (info.remainingFormatted) lines.push(`#   剩余流量: ${info.remainingFormatted}`);
     if (info.expireFormatted) lines.push(`#   到期时间: ${info.expireFormatted}`);
-    
-    if (index < allSubscriptionInfos.length - 1) {
+
+    if (index < (allSubscriptionInfos || []).length - 1) {
       lines.push('#   ---');
     }
   });
-  
+
   lines.push('# ========================================');
   lines.push('');
-  
+
   return lines.join('\n');
 }
 
@@ -501,6 +568,45 @@ app.get('/api/tokens', requireAuth, (req, res) => {
   }
 });
 
+// Token管理API - 更新订阅合并选项（路由规则 / WireGuard）
+app.patch('/api/tokens/:token', requireAuth, (req, res) => {
+  try {
+    const { token } = req.params;
+    const body = req.body || {};
+    const patch = {};
+    if (typeof body.useRules === 'boolean') {
+      patch.useRules = body.useRules;
+    }
+    if (typeof body.useWireGuard === 'boolean') {
+      patch.useWireGuard = body.useWireGuard;
+    }
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ error: '请提供 useRules 或 useWireGuard（布尔值）' });
+    }
+    const all = getAllTokens();
+    const existing = all.find(t => t.token === token);
+    if (!existing) {
+      return res.status(404).json({ error: 'Token不存在' });
+    }
+    if (existing.active === false) {
+      return res.status(400).json({ error: '已失效的订阅无法修改选项' });
+    }
+    const updated = updateTokenOptions(token, patch);
+    if (!updated) {
+      return res.status(500).json({ error: '更新失败' });
+    }
+    res.json({
+      success: true,
+      token: updated.token,
+      configName: updated.configName,
+      useRules: updated.useRules !== false,
+      useWireGuard: updated.useWireGuard !== false
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Token管理API - 失效token
 app.delete('/api/tokens/:token', requireAuth, (req, res) => {
   try {
@@ -549,28 +655,41 @@ app.delete('/api/tokens/:token/remove', requireAuth, (req, res) => {
 app.get('/config/:configName/:token', async (req, res) => {
   try {
     const { configName, token } = req.params;
-    
-    // 验证token
-    const tokenObj = validateToken(token);
-    
-    // Token失效或不存在时，返回空配置模板（而不是401错误）
-    // 这样可以确保即使订阅源失效，客户端仍然可以使用之前的配置
-    if (!tokenObj) {
-      console.log(`⚠️ Token失效或不存在 [${token}]: ${configName}，返回空配置模板`);
-      
+
+    const tokenRecord = getTokenRecord(token);
+
+    // 已从列表「删除记录」等：文件里无此 token——直接断开连接，不发送任何 HTTP 状态码与正文（不返回 404）
+    if (!tokenRecord) {
+      console.log(`⚠️ Token 不存在（已删除记录或从未存在） [${token}]: ${configName} → 关闭连接，无 HTTP 响应`);
+      try {
+        req.socket.destroy();
+      } catch (e) {
+        // ignore
+      }
+      return;
+    }
+
+    // 仅「失效」：记录仍在，返回 200 + 空模板，让客户端用本次拉取结果覆盖本地订阅文件
+    if (tokenRecord.active === false) {
+      console.log(`⚠️ Token 已失效 [${token}]: ${configName}，返回空配置模板（200）`);
+      markBlankTemplateServedAfterRevoke(token);
       const emptyConfig = generateEmptyConfigTemplate();
       const yamlConfig = yaml.dump(emptyConfig, {
         lineWidth: -1,
         noRefs: true,
         sortKeys: false
       });
-      
-      // 添加注释说明
-      const comment = `# ⚠️ 订阅源已失效或不存在\n# 这是一个空的配置模板，请重新生成订阅链接\n# 您之前的配置已缓存，可以继续使用\n\n`;
-      
+      const comment =
+        '# ⚠️ 此订阅链接已在管理端失效\n' +
+        '# 以下为空白配置模板；客户端更新订阅时应以本内容覆盖本地配置文件，从而停用本订阅\n' +
+        '# 如需继续使用，请在管理界面重新生成订阅链接\n\n';
       return res.type('text/yaml').send(comment + yamlConfig);
     }
-    
+
+    incrementTokenUsage(token);
+
+    const tokenObj = tokenRecord;
+
     // 验证token对应的配置名称是否匹配URL中的配置名称
     if (tokenObj.configName !== configName) {
       console.log(`⚠️ Token配置不匹配 [${token}]: URL=${configName}, Token=${tokenObj.configName}，返回空配置模板`);
@@ -604,28 +723,87 @@ app.get('/config/:configName/:token', async (req, res) => {
     }
     
     console.log(`\n✓ 订阅请求 [${token}]: ${configName}`);
-    
-    // 从远程 URL 拉取并合并基础配置
-    const { config: baseConfig, subscriptionInfo, allSubscriptionInfos } = await fetchAndMergeConfigs(appConfig.configUrls);
-    
-    // 将 WireGuard 配置转换为 Clash 格式
+
+    const lastAttemptAt = Date.now();
+
+    let fetchPack;
+    try {
+      fetchPack = await fetchAndMergeConfigs(appConfig.configUrls);
+    } catch (err) {
+      console.error('拉取远程订阅异常:', err.message);
+      fetchPack = {
+        config: createEmptyConfig(),
+        subscriptionInfo: null,
+        allSubscriptionInfos: [],
+        remoteFetchOk: false
+      };
+    }
+
+    const remoteFetchOk = fetchPack.remoteFetchOk === true;
+    let baseConfig;
+    let subscriptionInfo;
+    let allSubscriptionInfos;
+    let usedStaleRemote = false;
+    let subscriptionDataUpdatedAt = null;
+
+    if (remoteFetchOk) {
+      baseConfig = fetchPack.config;
+      subscriptionInfo = fetchPack.subscriptionInfo;
+      allSubscriptionInfos = fetchPack.allSubscriptionInfos;
+      subscriptionDataUpdatedAt = lastAttemptAt;
+      // 仅缓存「远程订阅合并」结果，切勿改为 finalConfig：否则下次会从已含 WG/规则的底稿再注入，导致重复叠加
+      writeRemoteCacheSuccess(appConfig.configUrls, {
+        config: baseConfig,
+        allSubscriptionInfos,
+        subscriptionInfo,
+        dataUpdatedAt: subscriptionDataUpdatedAt
+      });
+    } else {
+      // stale.config 与成功拉取时写入的 baseConfig 同源；每次请求会在 appendMultipleWireGuardProfiles / baseConfigWithOptionalPrependRules 内深拷贝后再注入，不会越请求越叠
+      const stale = readStaleRemoteCache(appConfig.configUrls);
+      if (stale) {
+        baseConfig = stale.config;
+        subscriptionInfo = stale.subscriptionInfo;
+        allSubscriptionInfos = stale.allSubscriptionInfos;
+        subscriptionDataUpdatedAt = stale.dataUpdatedAt;
+        usedStaleRemote = true;
+        console.log('⚠️ 远程订阅全部拉取失败，使用上次成功缓存的合并结果');
+      } else {
+        baseConfig = fetchPack.config;
+        subscriptionInfo = fetchPack.subscriptionInfo;
+        allSubscriptionInfos = fetchPack.allSubscriptionInfos;
+        subscriptionDataUpdatedAt = null;
+      }
+    }
+
+    const useRules = tokenObj.useRules !== false;
+    const useWireGuard = tokenObj.useWireGuard !== false;
+    const prependRules = useRules ? (appConfig.prependRules || []) : [];
+
+    function baseConfigWithOptionalPrependRules() {
+      const cfg = JSON.parse(JSON.stringify(baseConfig));
+      if (!cfg.rules) cfg.rules = [];
+      if (prependRules.length) {
+        cfg.rules.unshift(...prependRules);
+      }
+      return cfg;
+    }
+
     const profile = Array.isArray(appConfig.wgProfiles) && appConfig.wgProfiles.length > 0
       ? appConfig.wgProfiles[0]
       : null;
 
     let finalConfig;
-    if (!profile) {
+    if (!useWireGuard) {
+      finalConfig = baseConfigWithOptionalPrependRules();
+    } else if (!profile) {
       console.log(`⚠️ 未配置 WireGuard 参数（wgProfiles 为空），仅返回远程订阅合并结果`);
-      finalConfig = JSON.parse(JSON.stringify(baseConfig));
-      if (!finalConfig.rules) finalConfig.rules = [];
-      finalConfig.rules.unshift(...(appConfig.prependRules || []));
+      finalConfig = baseConfigWithOptionalPrependRules();
     } else {
       const wg = wireguardConfigs[configName];
       if (!wg) {
         console.log(`⚠️ 找不到对应的 WireGuard 配置: ${configName}，仅返回远程订阅合并结果`);
-        finalConfig = JSON.parse(JSON.stringify(baseConfig));
-        if (!finalConfig.rules) finalConfig.rules = [];
-        finalConfig.rules.unshift(...(appConfig.prependRules || []));
+        finalConfig = baseConfigWithOptionalPrependRules();
       } else {
         const dns = Array.isArray(profile.wgDns)
           ? profile.wgDns.map(d => String(d).trim()).filter(Boolean)
@@ -657,7 +835,7 @@ app.get('/config/:configName/:token', async (req, res) => {
         finalConfig = appendMultipleWireGuardProfiles(
           baseConfig,
           items,
-          appConfig.prependRules || []
+          prependRules
         );
       }
     }
@@ -677,12 +855,14 @@ app.get('/config/:configName/:token', async (req, res) => {
       sortKeys: false
     });
     
-    // 在 YAML 开头添加所有订阅源信息注释
-    if (allSubscriptionInfos.length > 0) {
-      const infoComment = generateAllSubscriptionComment(allSubscriptionInfos);
-      yamlConfig = infoComment + yamlConfig;
-    }
-    
+    const infoComment = generateAllSubscriptionComment(allSubscriptionInfos, {
+      remoteFetchOk,
+      usedStaleRemote,
+      subscriptionDataUpdatedAt,
+      lastAttemptAt
+    });
+    yamlConfig = infoComment + yamlConfig;
+
     res.type('text/yaml').send(yamlConfig);
     
     console.log(`✓ 订阅成功: ${configName} (${token})\n`);

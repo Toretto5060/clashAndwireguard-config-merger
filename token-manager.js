@@ -79,7 +79,11 @@ function createToken(configName) {
     active: true,
     createdAt: Date.now(), // 使用时间戳而不是ISO字符串
     lastUsed: null,
-    usageCount: 0
+    usageCount: 0,
+    /** 是否合并左侧「路由规则」；缺省为 true（兼容旧数据） */
+    useRules: true,
+    /** 是否注入 WireGuard 节点与左侧代理组；缺省为 true */
+    useWireGuard: true
   };
   
   tokens.push(tokenObj);
@@ -90,21 +94,59 @@ function createToken(configName) {
 }
 
 /**
- * 验证token
+ * 按 token 字符串查找记录（含已失效），用于区分「已删除」与「仅失效」
+ */
+function getTokenRecord(token) {
+  const tokens = loadTokens();
+  return tokens.find(t => t.token === token) || null;
+}
+
+/**
+ * 有效订阅被拉取时更新使用统计（须在已确认 active 后调用）
+ */
+function incrementTokenUsage(token) {
+  const tokens = loadTokens();
+  const tokenObj = tokens.find(t => t.token === token && t.active);
+  if (!tokenObj) {
+    return false;
+  }
+  tokenObj.lastUsed = Date.now();
+  tokenObj.usageCount = (tokenObj.usageCount || 0) + 1;
+  return saveTokens(tokens);
+}
+
+/**
+ * 已失效的订阅被客户端拉取空白模板后标记，便于管理端确认本地配置已被覆盖
+ */
+function markBlankTemplateServedAfterRevoke(tokenStr) {
+  const tokens = loadTokens();
+  const t = tokens.find(x => x.token === tokenStr);
+  if (!t || t.active !== false) {
+    return false;
+  }
+  if (t.blankServedAfterRevoke) {
+    return true;
+  }
+  t.blankServedAfterRevoke = true;
+  t.blankServedAfterRevokeAt = Date.now();
+  return saveTokens(tokens);
+}
+
+/**
+ * 验证token（仅有效 token 返回对象并刷新使用统计；失效/不存在返回 null）
  * @param {string} token - token字符串
  * @returns {object|null} token对象，如果无效返回null
  */
 function validateToken(token) {
   const tokens = loadTokens();
   const tokenObj = tokens.find(t => t.token === token && t.active);
-  
+
   if (tokenObj) {
-    // 更新使用信息
-    tokenObj.lastUsed = Date.now(); // 使用时间戳
-    tokenObj.usageCount++;
+    tokenObj.lastUsed = Date.now();
+    tokenObj.usageCount = (tokenObj.usageCount || 0) + 1;
     saveTokens(tokens);
   }
-  
+
   return tokenObj;
 }
 
@@ -120,6 +162,8 @@ function revokeToken(token) {
   if (tokenObj) {
     tokenObj.active = false;
     tokenObj.revokedAt = Date.now(); // 使用时间戳
+    delete tokenObj.blankServedAfterRevoke;
+    delete tokenObj.blankServedAfterRevokeAt;
     saveTokens(tokens);
     console.log(`Token已失效: ${token}`);
     return true;
@@ -146,6 +190,30 @@ function removeToken(token) {
 }
 
 /**
+ * 更新订阅 token 的合并选项（路由规则 / WireGuard）
+ * @param {string} tokenStr
+ * @param {{ useRules?: boolean, useWireGuard?: boolean }} opts
+ * @returns {object|null} 更新后的 token 对象，失败返回 null
+ */
+function updateTokenOptions(tokenStr, opts) {
+  const tokens = loadTokens();
+  const tokenObj = tokens.find(t => t.token === tokenStr);
+  if (!tokenObj) {
+    return null;
+  }
+  if (typeof opts.useRules === 'boolean') {
+    tokenObj.useRules = opts.useRules;
+  }
+  if (typeof opts.useWireGuard === 'boolean') {
+    tokenObj.useWireGuard = opts.useWireGuard;
+  }
+  if (!saveTokens(tokens)) {
+    return null;
+  }
+  return tokenObj;
+}
+
+/**
  * 获取配置的token
  * @param {string} configName - 配置文件名
  * @returns {object|null} token对象
@@ -166,8 +234,12 @@ function getAllTokens() {
 module.exports = {
   createToken,
   validateToken,
+  getTokenRecord,
+  incrementTokenUsage,
+  markBlankTemplateServedAfterRevoke,
   revokeToken,
   removeToken,
+  updateTokenOptions,
   getTokenByConfig,
   getAllTokens
 };
