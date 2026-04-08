@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WireGuard 配置管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            padding: 15px 20px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: calc(100vh - 140px);
+        }
+
+        .panel {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            font-size: 18px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .panel-header-sub {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 400;
+            opacity: 0.88;
+            margin-left: 10px;
+            line-height: 1.4;
+        }
+
+        .panel-content {
+            padding: 30px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .url-list {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            background: #f9f9f9;
+        }
+
+        .url-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .url-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .url-input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .url-item input {
+            flex: 1;
+            padding-right: 40px;
+        }
+
+        .url-item input.masked {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+
+        .btn-eye {
+            position: absolute;
+            right: 10px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .btn-eye:hover {
+            opacity: 1;
+        }
+
+        .dns-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .wg-profile-card {
+            border: 2px solid #e8e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 14px;
+            background: #fafbff;
+        }
+
+        .wg-profile-card .wg-profile-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .wg-profile-card .form-group {
+            margin-bottom: 16px;
+        }
+
+        .wg-profile-card .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .wg-direct-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .wg-direct-row input[type="checkbox"] {
+            width: auto;
+        }
+
+        .right-mode-radios {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            margin-bottom: 8px;
+        }
+
+        .right-mode-radios label {
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .right-mode-radios input[type="radio"] {
+            width: auto;
+        }
+
+        .delete-radio-list {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+
+        .delete-radio-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 4px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .delete-radio-row:last-child {
+            border-bottom: none;
+        }
+
+        .delete-radio-row input[type="radio"] {
+            width: auto;
+            flex-shrink: 0;
+            margin-right: 8px;
+        }
+
+        .script-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .script-modal {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            width: 90%;
+            max-width: 720px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .script-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: #f5f5f7;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .script-modal-header button {
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 6px;
+        }
+
+        .script-modal-body {
+            padding: 0;
+        }
+
+        .script-modal-body pre {
+            margin: 0;
+            max-height: 70vh;
+            overflow: auto;
+            font-size: 12px;
+            background: #1e1e1e;
+            color: #eee;
+            padding: 12px;
+            white-space: pre-wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c82333;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-add {
+            background: #28a745;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-add:hover {
+            background: #218838;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .button-group .btn {
+            flex: 1;
+        }
+
+        .subscription-item {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .subscription-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px 14px;
+            margin-bottom: 10px;
+        }
+
+        .subscription-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .subscription-flags {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #444;
+        }
+
+        .subscription-flags label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .subscription-flags input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .subscription-flags label.token-flag-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .btn-inline {
+            padding: 6px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            background: #f8f9fa;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .btn-inline:hover:not(:disabled) {
+            background: #eef1f4;
+        }
+
+        .btn-inline:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-custom-rules {
+            position: relative;
+        }
+
+        .custom-rule-dot {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #dc3545;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+
+        .custom-rule-modal-body {
+            padding: 14px;
+        }
+
+        .custom-rule-modal-body textarea {
+            width: 100%;
+            min-height: 180px;
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .custom-rule-modal-actions {
+            display: flex;
+            gap: 10px;
+            padding: 12px 14px 14px;
+            border-top: 1px solid #e0e0e0;
+            background: #fafafa;
+        }
+
+        .custom-rule-modal-actions .btn {
+            flex: 1;
+        }
+
+        .custom-rule-position {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            margin: 10px 0 8px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .custom-rule-position label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .custom-rule-position input[type="radio"] {
+            width: auto;
+        }
+
+        .subscription-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .subscription-item.inactive {
+            opacity: 0.6;
+            border: 2px dashed #dc3545 !important;
+            background: #fff5f5 !important;
+        }
+
+        .subscription-item.inactive .subscription-name {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        .subscription-url {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin: 10px 0;
+            border: 1px solid #dee2e6;
+        }
+
+        .subscription-meta {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .subscription-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .subscription-actions .btn {
+            flex: 1;
+        }
+
+        .btn-copy {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-copy:hover {
+            background: #138496;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Toast 通知 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 9999;
+            animation: slideIn 0.3s ease-out;
+            min-width: 250px;
+        }
+
+        .toast-success {
+            background: #28a745;
+        }
+
+        .toast-error {
+            background: #dc3545;
+        }
+
+        .toast-info {
+            background: #17a2b8;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+
+        .toast.hiding {
+            animation: slideOut 0.3s ease-in forwards;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                overflow-x: hidden;
+            }
+
+            .header {
+                padding: 12px 15px;
+                margin-bottom: 10px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .header p {
+                font-size: 11px;
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+                gap: 10px;
+                height: auto;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .panel {
+                min-height: auto;
+            }
+
+            /* 移动端：转订阅源管理在上面 */
+            .panel:first-child {
+                order: 2;
+            }
+
+            .panel:last-child {
+                order: 1;
+            }
+
+            .panel-content {
+                padding: 20px;
+                max-height: 600px;
+            }
+
+            .dns-inputs {
+                grid-template-columns: 1fr;
+            }
+
+            .subscription-meta {
+                grid-template-columns: 1fr;
+                gap: 5px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .subscription-actions {
+                flex-direction: column;
+            }
+
+            .toast {
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+            }
+        }
+
+        /* 滚动条美化 */
+        .panel-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>🔐 WireGuard 配置管理中心</h1>
+            <p>统一管理您的 Clash 订阅配置和 WireGuard 代理</p>
+        </div>
+
+        <!-- 左右布局 -->
+        <div class="layout">
+            <!-- 左侧：订阅配置 -->
+            <div class="panel">
+                <div class="panel-header">
+                    ⚙️ 订阅配置
+                </div>
+                <div class="panel-content">
+                    <form id="configForm">
+                        <!-- 订阅源地址 -->
+                        <div class="form-group">
+                            <label>订阅源地址</label>
+                            <div class="url-list" id="urlList"></div>
+                            <button type="button" class="btn btn-add btn-small" onclick="addUrlInput()">+ 添加订阅源</button>
+                            <div class="help-text">支持多个 Clash 订阅源地址</div>
+                        </div>
+
+                        <!-- WireGuard 配置（单组模式） -->
+                        <div class="form-group">
+                            <label>WireGuard 配置</label>
+                            <div class="help-text" style="margin-bottom:10px;">当前仅使用一组 WireGuard 参数，应用于每个订阅对应的配置文件。</div>
+                            <div id="wgProfilesContainer"></div>
+                        </div>
+
+                        <!-- 全局路由规则 -->
+                        <div class="form-group">
+                            <label for="prependRules">全局路由规则</label>
+                            <textarea id="prependRules" name="prependRules" rows="6" placeholder="每行一条规则（全局共用）。代理组名需与上方某一组「代理组名称」一致，例如：&#10;IP-CIDR,192.168.0.0/16,🏠 Home&#10;IP-CIDR,10.0.0.0/8,🏢 Office"></textarea>
+                            <div class="help-text">自定义全局路由规则，每行一条；全部 WireGuard 组共用本列表</div>
+                        </div>
+
+                        <!-- 按钮组 -->
+                        <div class="button-group">
+                            <button type="submit" class="btn btn-primary">💾 保存配置</button>
+                            <button type="button" class="btn btn-secondary" id="btnReloadConf" onclick="reloadConfFromServer()">🔄 重新加载</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 右侧：转订阅源管理 -->
+            <div class="panel">
+                <div class="panel-header">
+                    🔗 转订阅源管理
+                    <span class="panel-header-sub">只能管理宿主机下的 WireGuard 配置</span>
+                </div>
+                <div class="panel-content">
+                    <!-- 生成订阅 / 新增客户端 / 删除客户端 -->
+                    <div class="form-group">
+                        <label>操作类型</label>
+                        <div class="right-mode-radios">
+                            <label><input type="radio" name="rightPanelMode" value="generate" checked> 生成订阅</label>
+                            <label><input type="radio" name="rightPanelMode" value="add"> 新增客户端</label>
+                            <label><input type="radio" name="rightPanelMode" value="delete"> 删除客户端</label>
+                        </div>
+                    </div>
+
+                    <div id="rightPanelGenerate" class="right-panel-mode-section">
+                        <div class="form-group">
+                            <label for="configSelect">选择配置文件</label>
+                            <select id="configSelect">
+                                <option value="">请选择...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="rightPanelAdd" class="right-panel-mode-section" style="display: none;">
+                        <div class="form-group">
+                            <label for="newClientName">客户端名称</label>
+                            <input type="text" id="newClientName" placeholder="例如 openwrt（将传给 add-client.sh）" autocomplete="off">
+                            <div class="help-text">仅字母、数字、<code>.</code> <code>_</code> <code>-</code>；与路由器生成的 <code>.conf</code> 文件名一致</div>
+                        </div>
+                    </div>
+
+                    <div id="rightPanelDelete" class="right-panel-mode-section" style="display: none;">
+                        <div class="form-group">
+                            <label>选择要删除的客户端（与当前 conf 列表一致）</label>
+                            <div id="deleteConfigRadioList" class="delete-radio-list"></div>
+                            <div class="help-text">将调用 <code>delete-client.sh &lt;名称&gt;</code>；脚本可在 <code>/app/script</code> 中替换</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <button type="button" id="rightPanelActionBtn" class="btn btn-success" style="width: 100%;" onclick="rightPanelPrimaryAction()">
+                            ✨ 生成订阅链接
+                        </button>
+                    </div>
+
+                    <hr style="margin: 30px 0; border: none; border-top: 2px solid #e0e0e0;">
+
+                    <!-- 订阅列表 -->
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 15px; color: #333;">已生成的订阅</label>
+                        <div id="subscriptionList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 认证检查
+        const authToken = sessionStorage.getItem('authToken');
+        if (!authToken) {
+            window.location.href = '/login.html';
+        }
+
+        // 设置全局请求头
+        function getAuthHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            };
+        }
+
+        // 处理认证错误
+        function handleAuthError(response) {
+            if (response.status === 401) {
+                sessionStorage.removeItem('authToken');
+                window.location.href = '/login.html';
+                return true;
+            }
+            return false;
+        }
+
+        let availableConfigsList = [];
+        let tokenIndex = new Map();
+
+        function genWgId() {
+            return 'wg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        }
+
+        function fillWgProfileConfigSelects() {
+            document.querySelectorAll('.wg-config-select').forEach(sel => {
+                const cur = sel.value;
+                sel.innerHTML = '';
+                const opt0 = document.createElement('option');
+                opt0.value = '';
+                opt0.textContent = '（未选择，订阅中不包含该 conf）';
+                sel.appendChild(opt0);
+                availableConfigsList.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name;
+                    sel.appendChild(opt);
+                });
+                if (cur && [...sel.options].some(o => o.value === cur)) {
+                    sel.value = cur;
+                }
+            });
+        }
+
+        function addWgProfileRow(profile = {}) {
+            const id = profile.id || 'wg-single-profile';
+            const container = document.getElementById('wgProfilesContainer');
+            const card = document.createElement('div');
+            card.className = 'wg-profile-card';
+            card.dataset.profileId = id;
+
+            const title = document.createElement('div');
+            title.className = 'wg-profile-title';
+            const titleLabel = document.createElement('span');
+            titleLabel.textContent = '🔌 WireGuard 参数';
+            title.appendChild(titleLabel);
+            card.appendChild(title);
+
+            const fg2 = document.createElement('div');
+            fg2.className = 'form-group';
+            const lb2 = document.createElement('label');
+            lb2.textContent = 'WireGuard MTU';
+            const mtu = document.createElement('input');
+            mtu.type = 'number';
+            mtu.className = 'wg-mtu';
+            mtu.required = true;
+            mtu.value = profile.wgMtu != null ? profile.wgMtu : 1340;
+            const ht2 = document.createElement('div');
+            ht2.className = 'help-text';
+            ht2.textContent = '建议值：1280-1420';
+            fg2.appendChild(lb2);
+            fg2.appendChild(mtu);
+            fg2.appendChild(ht2);
+            card.appendChild(fg2);
+
+            const fg3 = document.createElement('div');
+            fg3.className = 'form-group';
+            const lb3 = document.createElement('label');
+            lb3.textContent = 'WireGuard DNS';
+            const dnsWrap = document.createElement('div');
+            dnsWrap.className = 'dns-inputs';
+            const dns1 = document.createElement('input');
+            dns1.type = 'text';
+            dns1.className = 'wg-dns1';
+            dns1.placeholder = '主 DNS';
+            dns1.required = true;
+            const dns2 = document.createElement('input');
+            dns2.type = 'text';
+            dns2.className = 'wg-dns2';
+            dns2.placeholder = '备用 DNS（可空）';
+            const dns = profile.wgDns || ['8.8.8.8', ''];
+            dns1.value = dns[0] || '';
+            dns2.value = dns[1] || '';
+            dnsWrap.appendChild(dns1);
+            dnsWrap.appendChild(dns2);
+            fg3.appendChild(lb3);
+            fg3.appendChild(dnsWrap);
+            card.appendChild(fg3);
+
+            const fg4 = document.createElement('div');
+            fg4.className = 'form-group';
+            const lb4 = document.createElement('label');
+            lb4.textContent = '代理组名称（Clash 中显示，且作为节点名）';
+            const gname = document.createElement('input');
+            gname.type = 'text';
+            gname.className = 'wg-group-name';
+            gname.required = true;
+            gname.value = profile.wgGroupName || '🏠 Home';
+            gname.dataset.lastName = gname.value;
+            const ht4 = document.createElement('div');
+            ht4.className = 'help-text';
+            ht4.textContent = '每组名称须唯一；全局路由规则里填写的策略组名需与此一致';
+            fg4.appendChild(lb4);
+            fg4.appendChild(gname);
+            fg4.appendChild(ht4);
+            card.appendChild(fg4);
+
+            container.appendChild(card);
+            fillWgProfileConfigSelects();
+        }
+
+        function renderWgProfilesFromConfig(profiles) {
+            const container = document.getElementById('wgProfilesContainer');
+            container.innerHTML = '';
+            if (!profiles || profiles.length === 0) {
+                addWgProfileRow({});
+                return;
+            }
+            profiles.forEach(p => addWgProfileRow(p));
+        }
+
+        function collectWgProfiles() {
+            const cards = document.querySelectorAll('#wgProfilesContainer .wg-profile-card');
+            const out = [];
+            cards.forEach(card => {
+                const dns1 = card.querySelector('.wg-dns1').value.trim();
+                const dns2 = card.querySelector('.wg-dns2').value.trim();
+                let wgDns = [dns1, dns2].map(s => s || '');
+                if (!wgDns.some(d => d)) {
+                    wgDns = ['8.8.8.8'];
+                }
+                out.push({
+                    id: card.dataset.profileId,
+                    wgMtu: parseInt(card.querySelector('.wg-mtu').value, 10),
+                    wgDns,
+                    wgGroupName: card.querySelector('.wg-group-name').value.trim(),
+                    includeDirect: true
+                });
+            });
+            return out;
+        }
+
+        function setupWgGroupNameDelegation() {
+            document.getElementById('wgProfilesContainer').addEventListener('blur', function(e) {
+                const t = e.target;
+                if (!t.classList || !t.classList.contains('wg-group-name')) return;
+                const oldName = t.dataset.lastName || '';
+                const newName = t.value.trim();
+                if (oldName && newName && oldName !== newName) {
+                    updateRulesGroupName(oldName, newName);
+                }
+                if (newName) {
+                    t.dataset.lastName = newName;
+                }
+            }, true);
+        }
+
+        function escapeHtml(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // Toast 通知
+        function showToast(message, type = 'success', callback = null) {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => {
+                    document.body.removeChild(toast);
+                    if (callback) callback();
+                }, 300);
+            }, 2000);
+        }
+
+        // 加载配置
+        async function loadConfig(showMessage = true) {
+            try {
+                const response = await fetch('/api/config', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (handleAuthError(response)) return;
+                
+                const config = await response.json();
+
+                // 填充订阅源地址
+                const urlList = document.getElementById('urlList');
+                urlList.innerHTML = '';
+                config.configUrls.forEach((url, idx) => addUrlInput(url, idx));
+
+                renderWgProfilesFromConfig(config.wgProfiles);
+                document.getElementById('prependRules').value = config.prependRules.join('\n');
+
+                if (showMessage) {
+                    showToast('配置加载成功', 'success');
+                }
+            } catch (error) {
+                showToast('加载配置失败: ' + error.message, 'error');
+            }
+        }
+
+        /** 从磁盘重新扫描 conf、并刷新 data 中的应用配置；替代原定时任务与整页刷新 */
+        async function reloadConfFromServer() {
+            const btn = document.getElementById('btnReloadConf');
+            if (btn) {
+                btn.disabled = true;
+            }
+            try {
+                const response = await fetch('/reload', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                if (handleAuthError(response)) return;
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || '重新加载失败');
+                }
+                await loadConfigSelect();
+                await loadConfig(false);
+                await loadSubscriptions();
+                showToast('已重新加载 conf 与配置', 'success');
+            } catch (error) {
+                showToast('重新加载失败: ' + error.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        // 保存配置
+        async function saveConfig(event) {
+            event.preventDefault();
+
+            const urlInputs = document.querySelectorAll('.url-item input');
+            // 若后端只返回打码值，这里保存前确保能拿到明文
+            const missing = Array.from(urlInputs).some(i => i.classList.contains('masked') && !i.dataset.realValue);
+            if (missing) {
+                await revealConfigUrlsOnce();
+                // 尽力补齐 realValue
+                Array.from(urlInputs).forEach(i => {
+                    if (!i.classList.contains('masked') || i.dataset.realValue) return;
+                    const idx = parseInt(i.dataset.urlIndex || '', 10);
+                    if (!Number.isNaN(idx) && revealedConfigUrlsCache && revealedConfigUrlsCache[idx]) {
+                        i.dataset.realValue = revealedConfigUrlsCache[idx];
+                        return;
+                    }
+                    const hit = (revealedConfigUrlsCache || []).find(u => maskUrl(u) === i.value);
+                    if (hit) i.dataset.realValue = hit;
+                });
+            }
+
+            const configUrls = Array.from(urlInputs)
+                .map(input => {
+                    if (input.classList.contains('masked') && input.dataset.realValue) {
+                        return input.dataset.realValue.trim();
+                    }
+                    return input.value.trim();
+                })
+                .filter(url => url);
+
+            const prependRulesText = document.getElementById('prependRules').value;
+            const prependRules = prependRulesText
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line);
+
+            const wgProfiles = collectWgProfiles();
+
+            const newConfig = {
+                configUrls,
+                wgProfiles,
+                prependRules
+            };
+
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(newConfig)
+                });
+
+                if (handleAuthError(response)) return;
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '保存失败');
+                }
+
+                showToast('配置保存成功！', 'success', () => {
+                    loadConfig(false);
+                });
+            } catch (error) {
+                showToast('保存失败: ' + error.message, 'error');
+            }
+        }
+
+        // 添加 URL 输入框
+        // 脱敏URL函数
+        function maskUrl(url) {
+            if (!url || url.length < 20) return url;
+            
+            // 提取协议
+            const protocolEnd = url.indexOf('://');
+            if (protocolEnd === -1) return url;
+            
+            const protocol = url.substring(0, protocolEnd + 3);
+            const rest = url.substring(protocolEnd + 3);
+            
+            // 显示前5个字符和后5个字符
+            const visibleStart = rest.substring(0, 5);
+            const visibleEnd = rest.substring(rest.length - 5);
+            
+            return `${protocol}${visibleStart}${'*'.repeat(Math.min(30, rest.length - 10))}${visibleEnd}`;
+        }
+
+        function addUrlInput(value = '', urlIndex = null) {
+            const urlList = document.getElementById('urlList');
+            const urlItem = document.createElement('div');
+            urlItem.className = 'url-item';
+            
+            // 创建输入框包装器
+            const inputWrapper = document.createElement('div');
+            inputWrapper.className = 'url-input-wrapper';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'https://example.com/clash/config';
+            // 后端默认下发打码值：此处不要把 realValue 设为 value（否则点眼睛不会去拉明文）
+            input.dataset.realValue = '';
+            if (typeof urlIndex === 'number') {
+                input.dataset.urlIndex = String(urlIndex);
+            }
+            
+            // 如果有值，初始显示为脱敏状态
+            if (value) {
+                input.value = value;
+                input.classList.add('masked');
+                input.readOnly = true;
+            }
+            
+            // 眼睛按钮
+            const eyeBtn = document.createElement('button');
+            eyeBtn.type = 'button';
+            eyeBtn.className = 'btn-eye';
+            eyeBtn.innerHTML = '👁️';
+            eyeBtn.title = '显示/隐藏完整地址';
+            eyeBtn.onclick = () => toggleUrlVisibility(input, eyeBtn);
+            
+            // 删除按钮
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-danger btn-small';
+            removeBtn.textContent = '删除';
+            removeBtn.onclick = () => removeUrlInput(removeBtn);
+            
+            inputWrapper.appendChild(input);
+            inputWrapper.appendChild(eyeBtn);
+            urlItem.appendChild(inputWrapper);
+            urlItem.appendChild(removeBtn);
+            urlList.appendChild(urlItem);
+        }
+
+        // 切换URL显示/隐藏
+        let revealedConfigUrlsCache = null;
+        async function revealConfigUrlsOnce() {
+            if (revealedConfigUrlsCache) return revealedConfigUrlsCache;
+            const resp = await fetch('/api/config/reveal-urls', { headers: getAuthHeaders() });
+            if (handleAuthError(resp)) return null;
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            revealedConfigUrlsCache = (data && data.configUrls) || [];
+            return revealedConfigUrlsCache;
+        }
+
+        async function toggleUrlVisibility(input, eyeBtn) {
+            if (input.classList.contains('masked')) {
+                // 显示完整地址：如没有 realValue，则向后端按需拉取一次
+                if (!input.dataset.realValue) {
+                    const arr = await revealConfigUrlsOnce();
+                    if (!arr) {
+                        showToast('获取明文订阅源失败', 'error');
+                        return;
+                    }
+                    // 优先按索引绑定（最稳定），否则尝试按打码值匹配
+                    const i = parseInt(input.dataset.urlIndex || '', 10);
+                    if (!Number.isNaN(i) && i >= 0 && i < arr.length) {
+                        input.dataset.realValue = arr[i];
+                    } else {
+                        const idx = arr.findIndex(u => maskUrl(u) === input.value);
+                        if (idx >= 0) {
+                            input.dataset.realValue = arr[idx];
+                        } else if (arr.length === 1) {
+                            input.dataset.realValue = arr[0];
+                        }
+                    }
+                }
+                input.value = input.dataset.realValue || input.value;
+                input.classList.remove('masked');
+                input.readOnly = false;
+                eyeBtn.innerHTML = '🙈';
+                eyeBtn.title = '隐藏地址';
+            } else {
+                // 脱敏显示
+                input.dataset.realValue = input.value;
+                input.value = maskUrl(input.value);
+                input.classList.add('masked');
+                input.readOnly = true;
+                eyeBtn.innerHTML = '👁️';
+                eyeBtn.title = '显示完整地址';
+            }
+        }
+
+        // 删除 URL 输入框
+        function removeUrlInput(btn) {
+            const urlList = document.getElementById('urlList');
+            if (urlList.children.length > 1) {
+                btn.parentElement.remove();
+            } else {
+                showToast('至少保留一个订阅源', 'error');
+            }
+        }
+
+        // 更新规则中的代理组名称
+        function updateRulesGroupName(oldName, newName) {
+            const rulesTextarea = document.getElementById('prependRules');
+            const rules = rulesTextarea.value.split('\n');
+            
+            const updatedRules = rules.map(rule => {
+                if (!rule.trim()) return rule;
+                
+                const lastCommaIndex = rule.lastIndexOf(',');
+                if (lastCommaIndex === -1) return rule;
+                
+                const beforeComma = rule.substring(0, lastCommaIndex + 1);
+                const afterComma = rule.substring(lastCommaIndex + 1);
+                
+                if (afterComma === oldName) {
+                    return beforeComma + newName;
+                }
+                
+                return rule;
+            });
+            
+            rulesTextarea.value = updatedRules.join('\n');
+        }
+
+        // 加载配置文件下拉列表
+        async function loadConfigSelect() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                availableConfigsList = data.available_configs || [];
+                fillWgProfileConfigSelects();
+
+                const select = document.getElementById('configSelect');
+                
+                select.innerHTML = '<option value="">请选择...</option>';
+                data.available_configs.forEach(config => {
+                    const option = document.createElement('option');
+                    option.value = config;
+                    option.textContent = config;
+                    select.appendChild(option);
+                });
+                renderDeleteConfigRadios();
+            } catch (error) {
+                showToast('加载配置列表失败: ' + error.message, 'error');
+            }
+        }
+
+        function renderDeleteConfigRadios() {
+            const box = document.getElementById('deleteConfigRadioList');
+            if (!box) return;
+            box.innerHTML = '';
+            if (!availableConfigsList.length) {
+                box.innerHTML = '<div class="help-text" style="margin:0;">暂无 conf，请先在本机 <code>conf</code> 目录放入 <code>.conf</code> 或点击左侧「重新加载」</div>';
+                return;
+            }
+            availableConfigsList.forEach(name => {
+                const row = document.createElement('label');
+                row.className = 'delete-radio-row';
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'deleteConfigName';
+                radio.value = name;
+                row.appendChild(radio);
+                const span = document.createElement('span');
+                span.textContent = name;
+                row.appendChild(span);
+                box.appendChild(row);
+            });
+        }
+
+        function syncRightPanelMode() {
+            const mode = document.querySelector('input[name="rightPanelMode"]:checked').value;
+            const gen = document.getElementById('rightPanelGenerate');
+            const add = document.getElementById('rightPanelAdd');
+            const del = document.getElementById('rightPanelDelete');
+            const btn = document.getElementById('rightPanelActionBtn');
+            if (gen) gen.style.display = mode === 'generate' ? 'block' : 'none';
+            if (add) add.style.display = mode === 'add' ? 'block' : 'none';
+            if (del) del.style.display = mode === 'delete' ? 'block' : 'none';
+            if (btn) {
+                if (mode === 'generate') {
+                    btn.textContent = '✨ 生成订阅链接';
+                    btn.classList.remove('btn-danger');
+                    btn.classList.add('btn-success');
+                } else if (mode === 'add') {
+                    btn.textContent = '➕ 新增客户端';
+                    btn.classList.remove('btn-danger');
+                    btn.classList.add('btn-success');
+                } else {
+                    btn.textContent = '🗑️ 删除客户端';
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-danger');
+                    renderDeleteConfigRadios();
+                }
+            }
+            updateAddClientButtonState();
+        }
+
+        function showScriptOutput(title, text) {
+            const backdrop = document.getElementById('scriptModal');
+            const titleEl = document.getElementById('scriptModalTitle');
+            const bodyEl = document.getElementById('scriptModalBody');
+            if (!backdrop || !titleEl || !bodyEl) {
+                console.log(title, text);
+                return;
+            }
+            if (!text || !text.trim()) {
+                backdrop.style.display = 'none';
+                bodyEl.textContent = '';
+                return;
+            }
+            titleEl.textContent = title || '脚本输出';
+            bodyEl.textContent = text;
+            backdrop.style.display = 'flex';
+        }
+
+        function closeScriptModal() {
+            const backdrop = document.getElementById('scriptModal');
+            const bodyEl = document.getElementById('scriptModalBody');
+            if (backdrop) {
+                backdrop.style.display = 'none';
+            }
+            if (bodyEl) {
+                bodyEl.textContent = '';
+            }
+        }
+
+        function updateAddClientButtonState() {
+            const input = document.getElementById('newClientName');
+            const btn = document.getElementById('rightPanelActionBtn');
+            const modeRadio = document.querySelector('input[name="rightPanelMode"]:checked');
+            if (!btn) return;
+            const mode = modeRadio ? modeRadio.value : 'generate';
+            if (mode !== 'add') {
+                btn.disabled = false;
+                return;
+            }
+            const hasValue = input && input.value.trim().length > 0;
+            btn.disabled = !hasValue;
+        }
+
+        function rightPanelPrimaryAction() {
+            const mode = document.querySelector('input[name="rightPanelMode"]:checked').value;
+            if (mode === 'generate') {
+                generateSubscription();
+            } else if (mode === 'add') {
+                runAddClientScript();
+            } else {
+                runDeleteClientScript();
+            }
+        }
+
+        async function runAddClientScript() {
+            const name = document.getElementById('newClientName').value.trim();
+            if (!name) {
+                showToast('请输入客户端名称', 'error');
+                return;
+            }
+            if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
+                showToast('名称仅允许字母、数字、. _ -', 'error');
+                return;
+            }
+            const btn = document.getElementById('rightPanelActionBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const response = await fetch('/api/wg/add-client', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ name })
+                });
+                if (handleAuthError(response)) return;
+                const data = await response.json();
+                const out = [data.stdout, data.stderr].filter(Boolean).join('\n');
+                if (response.ok && data.success) {
+                    const okText = out.includes('客户端配置已生成') || out.includes('配置已存在');
+                    showToast(okText ? '操作成功（见脚本输出）' : '脚本已执行', okText ? 'success' : 'info');
+                    showScriptOutput('add-client.sh 输出', out);
+                    // 刷新 conf 列表 / 删除模式单选
+                    await reloadConfFromServer();
+                    // 清空输入框，操作类型回到「生成订阅」
+                    const input = document.getElementById('newClientName');
+                    if (input) {
+                        input.value = '';
+                    }
+                    const genRadio = document.querySelector('input[name="rightPanelMode"][value="generate"]');
+                    if (genRadio) {
+                        genRadio.checked = true;
+                    }
+                    syncRightPanelMode();
+                    updateAddClientButtonState();
+                } else {
+                    showToast(data.error || data.message || '执行失败', 'error');
+                    showScriptOutput('add-client.sh 错误输出', out);
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function runDeleteClientScript() {
+            const sel = document.querySelector('input[name="deleteConfigName"]:checked');
+            if (!sel) {
+                showToast('请选择要删除的配置', 'error');
+                return;
+            }
+            const name = sel.value;
+            if (!confirm('确定执行删除？将调用 delete-client.sh 删除客户端「' + name + '」')) {
+                return;
+            }
+            const btn = document.getElementById('rightPanelActionBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const response = await fetch('/api/wg/delete-client', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ name })
+                });
+                if (handleAuthError(response)) return;
+                const data = await response.json();
+                const out = [data.stdout, data.stderr].filter(Boolean).join('\n');
+                if (response.ok && data.success) {
+                    showToast('删除成功', 'success');
+                    if (out.trim()) showScriptOutput('delete-client.sh 输出', out);
+                    await reloadConfFromServer();
+                } else {
+                    showToast(data.error || data.message || '删除失败', 'error');
+                    showScriptOutput('delete-client.sh 输出', out);
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        // 生成订阅
+        async function generateSubscription() {
+            const configName = document.getElementById('configSelect').value;
+            if (!configName) {
+                showToast('请先选择配置文件', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/tokens', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ configName })
+                });
+
+                if (handleAuthError(response)) return;
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || error.error || '生成失败');
+                }
+
+                const result = await response.json();
+                showToast('订阅链接生成成功！', 'success');
+                loadSubscriptions();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        // 加载订阅列表
+        async function loadSubscriptions() {
+            try {
+                const response = await fetch('/api/tokens', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (handleAuthError(response)) return;
+                
+                const tokens = await response.json();
+                
+                const listContainer = document.getElementById('subscriptionList');
+                
+                if (tokens.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                            </svg>
+                            <p>暂无订阅链接</p>
+                            <p style="font-size: 12px; margin-top: 5px;">请在左侧选择配置文件后生成</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 排序逻辑：
+                // 1. 有效的在上面，失效的在下面
+                // 2. 同样状态下，按创建时间倒序（新的在前）
+                const sortedTokens = tokens.sort((a, b) => {
+                    // 先按状态排序
+                    if (a.active && !b.active) return -1;
+                    if (!a.active && b.active) return 1;
+                    // 同样状态下，按创建时间倒序
+                    // 兼容处理：如果是字符串，转换为时间戳
+                    const timeA = typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : a.createdAt;
+                    const timeB = typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt;
+                    return timeB - timeA;
+                });
+                
+                tokenIndex = new Map(sortedTokens.map(t => [t.token, t]));
+
+                listContainer.innerHTML = sortedTokens.map(token => {
+                    const isActive = token.active !== false;
+                    const statusClass = isActive ? 'status-active' : 'status-inactive';
+                    const covered = !isActive && token.blankServedAfterRevoke;
+                    const statusText = isActive ? '✓ 有效' : (covered ? '✗ 已失效（已覆盖）' : '✗ 已失效');
+                    const itemClass = isActive ? '' : ' inactive';
+                    const useRules = token.useRules !== false;
+                    const useWireGuard = token.useWireGuard !== false;
+                    const customRules = Array.isArray(token.customRules) ? token.customRules : [];
+                    const hasCustom = customRules.length > 0;
+                    const dis = isActive ? '' : 'disabled';
+                    const lblClass = isActive ? '' : 'token-flag-disabled';
+                    
+                    return `
+                    <div class="subscription-item${itemClass}" data-sub-token="${escapeHtml(token.token)}">
+                        <div class="subscription-header">
+                            <span class="subscription-name">📁 ${escapeHtml(token.configName)}</span>
+                            <div class="subscription-flags">
+                                <label class="${lblClass}"><input type="checkbox" class="token-opt-wg" data-token="${escapeHtml(token.token)}" ${useWireGuard ? 'checked' : ''} ${dis}> WireGuard</label>
+                                <label class="${lblClass}"><input type="checkbox" class="token-opt-rules" data-token="${escapeHtml(token.token)}" ${useRules ? 'checked' : ''} ${dis}> 全局路由</label>
+                                <button type="button" class="btn-inline btn-custom-rules" data-token="${escapeHtml(token.token)}" ${isActive ? '' : 'disabled'}>
+                                    自定义路由${hasCustom ? '<span class="custom-rule-dot" title="已设置自定义路由"></span>' : ''}
+                                </button>
+                            </div>
+                            <span class="subscription-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="subscription-url">
+                            <span class="sub-url-text">${escapeHtml(isActive ? (token.subscriptionUrlMasked || '') : (token.subscriptionUrl || ''))}</span>
+                            ${isActive ? `
+                                <button type="button" class="btn-eye btn-sub-url-eye" data-token="${escapeHtml(token.token)}" style="position: static; margin-left: 8px;" title="显示/隐藏完整地址">👁️</button>
+                            ` : ''}
+                        </div>
+                        <div class="subscription-meta">
+                            <div>🕒 创建: ${new Date(token.createdAt).toLocaleString('zh-CN')}</div>
+                            <div>📊 使用: ${token.usageCount || 0} 次</div>
+                            <div>⏰ 最后使用: ${token.lastUsed ? new Date(token.lastUsed).toLocaleString('zh-CN') : '未使用'}</div>
+                        </div>
+                        <div class="subscription-actions">
+                            ${isActive ? `
+                                <button type="button" class="btn btn-copy btn-small" onclick='copySubscriptionUrl(${JSON.stringify(token.token)})'>
+                                    📋 复制链接
+                                </button>
+                                <button type="button" class="btn btn-danger btn-small" onclick="revokeSubscription('${token.token}')">
+                                    ❌ 失效
+                                </button>
+                            ` : `
+                                <button class="btn btn-secondary btn-small" disabled>
+                                    已失效${covered ? '（已覆盖）' : ''}
+                                </button>
+                                <button type="button" class="btn btn-danger btn-small" onclick="deleteInactiveSubscription('${token.token}')">
+                                    🗑 删除记录
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+                }).join('');
+            } catch (error) {
+                showToast('加载订阅列表失败: ' + error.message, 'error');
+            }
+        }
+
+        async function patchSubscriptionTokenOptions(tokenStr, rulesChecked, wgChecked, revertCheckbox) {
+            try {
+                const response = await fetch('/api/tokens/' + encodeURIComponent(tokenStr), {
+                    method: 'PATCH',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        useRules: rulesChecked,
+                        useWireGuard: wgChecked
+                    })
+                });
+                if (handleAuthError(response)) {
+                    if (revertCheckbox) revertCheckbox.checked = !revertCheckbox.checked;
+                    return;
+                }
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || err.message || '更新失败');
+                }
+                showToast('订阅选项已保存', 'success');
+            } catch (e) {
+                if (revertCheckbox) {
+                    revertCheckbox.checked = !revertCheckbox.checked;
+                }
+                showToast(e.message || '更新失败', 'error');
+            }
+        }
+
+        function openCustomRulesModal(tokenStr) {
+            const t = tokenIndex.get(tokenStr);
+            if (!t) {
+                showToast('找不到该订阅记录，请刷新列表', 'error');
+                return;
+            }
+            if (t.active === false) {
+                showToast('已失效的订阅不可编辑自定义路由', 'error');
+                return;
+            }
+
+            const backdrop = document.getElementById('customRuleModal');
+            const titleEl = document.getElementById('customRuleModalTitle');
+            const tokenEl = document.getElementById('customRuleModalToken');
+            const textEl = document.getElementById('customRuleTextarea');
+            const saveBtn = document.getElementById('customRuleSaveBtn');
+            const posBefore = document.getElementById('customRulePosBefore');
+            const posAfter = document.getElementById('customRulePosAfter');
+
+            titleEl.textContent = `自定义路由 - ${t.configName}`;
+            tokenEl.textContent = t.token;
+
+            const rules = Array.isArray(t.customRules) ? t.customRules : [];
+            textEl.value = rules.join('\n');
+
+            const pos = t.customRulesPosition === 'before' ? 'before' : 'after';
+            if (pos === 'before') posBefore.checked = true;
+            else posAfter.checked = true;
+
+            const originallyHadRules = Array.isArray(t.customRules) && t.customRules.length > 0;
+
+            function syncSaveState() {
+                const has = textEl.value.split('\n').map(s => s.trim()).filter(Boolean).length > 0;
+                // 允许保存空规则：当原来已设置过规则、现在清空时，用于“删除自定义规则”
+                saveBtn.disabled = !(has || originallyHadRules);
+            }
+            textEl.oninput = syncSaveState;
+            syncSaveState();
+
+            saveBtn.onclick = async function() {
+                const rulesArr = textEl.value
+                    .split('\n')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                const chosenPos = posBefore.checked ? 'before' : 'after';
+                saveBtn.disabled = true;
+                try {
+                    const resp = await fetch('/api/tokens/' + encodeURIComponent(tokenStr), {
+                        method: 'PATCH',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({
+                            customRules: rulesArr,
+                            customRulesPosition: chosenPos
+                        })
+                    });
+                    if (handleAuthError(resp)) return;
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({}));
+                        throw new Error(err.error || err.message || '保存失败');
+                    }
+                    showToast('自定义路由已保存', 'success');
+                    closeCustomRulesModal();
+                    await loadSubscriptions();
+                } catch (e) {
+                    showToast(e.message || '保存失败', 'error');
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            };
+
+            backdrop.style.display = 'flex';
+        }
+
+        function closeCustomRulesModal() {
+            const backdrop = document.getElementById('customRuleModal');
+            if (backdrop) backdrop.style.display = 'none';
+        }
+
+        async function revealSubscriptionUrl(tokenStr) {
+            const resp = await fetch('/api/tokens/' + encodeURIComponent(tokenStr) + '/url', {
+                headers: getAuthHeaders()
+            });
+            if (handleAuthError(resp)) return null;
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            return data && data.subscriptionUrl ? String(data.subscriptionUrl) : null;
+        }
+
+        // 复制订阅 URL（复制的一定是明文）
+        async function copySubscriptionUrl(tokenStr) {
+            const url = await revealSubscriptionUrl(tokenStr);
+            if (!url) {
+                showToast('获取明文订阅链接失败', 'error');
+                return;
+            }
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('订阅链接已复制到剪贴板', 'info');
+            }).catch(() => {
+                showToast('复制失败，请手动复制', 'error');
+            });
+        }
+
+        // 失效订阅
+        async function revokeSubscription(token) {
+            if (!confirm('确定要失效此订阅吗？失效后需要重新生成。')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/tokens/${token}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+
+                if (handleAuthError(response)) return;
+
+                if (!response.ok) {
+                    throw new Error('失效失败');
+                }
+
+                showToast('订阅已失效', 'success');
+                loadSubscriptions();
+            } catch (error) {
+                showToast('操作失败: ' + error.message, 'error');
+            }
+        }
+
+        // 删除已失效订阅记录
+        async function deleteInactiveSubscription(token) {
+            if (!confirm('确定要删除这条已失效订阅记录吗？删除后不可恢复。')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/tokens/${token}/remove`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+                if (handleAuthError(response)) return;
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || '删除失败');
+                }
+                showToast('已删除失效订阅记录', 'success');
+                loadSubscriptions();
+            } catch (error) {
+                showToast('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 页面加载时初始化（先拉取 conf 列表，再渲染 WireGuard 组下拉框）
+        document.addEventListener('DOMContentLoaded', async function() {
+            setupWgGroupNameDelegation();
+            document.getElementById('configForm').addEventListener('submit', saveConfig);
+
+            document.querySelectorAll('input[name="rightPanelMode"]').forEach(function(r) {
+                r.addEventListener('change', function() {
+                    syncRightPanelMode();
+                    updateAddClientButtonState();
+                });
+            });
+            const newClientInput = document.getElementById('newClientName');
+            if (newClientInput) {
+                newClientInput.addEventListener('input', updateAddClientButtonState);
+            }
+            syncRightPanelMode();
+            updateAddClientButtonState();
+
+            document.getElementById('subscriptionList').addEventListener('change', function(e) {
+                const t = e.target;
+                if (!t.matches('.token-opt-rules, .token-opt-wg')) return;
+                const row = t.closest('.subscription-item');
+                if (!row) return;
+                const rulesCb = row.querySelector('.token-opt-rules');
+                const wgCb = row.querySelector('.token-opt-wg');
+                if (!rulesCb || !wgCb || rulesCb.disabled) return;
+                const tokenStr = t.dataset.token;
+                if (!tokenStr) return;
+                patchSubscriptionTokenOptions(tokenStr, rulesCb.checked, wgCb.checked, t);
+            });
+
+            document.getElementById('subscriptionList').addEventListener('click', function(e) {
+                const btn = e.target.closest('.btn-custom-rules');
+                if (!btn) return;
+                const tokenStr = btn.dataset.token;
+                if (!tokenStr) return;
+                openCustomRulesModal(tokenStr);
+            });
+
+            document.getElementById('subscriptionList').addEventListener('click', async function(e) {
+                const eye = e.target.closest('.btn-sub-url-eye');
+                if (!eye) return;
+                const tokenStr = eye.dataset.token;
+                if (!tokenStr) return;
+                const row = eye.closest('.subscription-item');
+                if (!row) return;
+                const textEl = row.querySelector('.sub-url-text');
+                if (!textEl) return;
+
+                // 还原为打码
+                if (eye.dataset.revealed === '1') {
+                    const t = tokenIndex.get(tokenStr);
+                    textEl.textContent = (t && t.subscriptionUrlMasked) ? t.subscriptionUrlMasked : textEl.textContent;
+                    eye.innerHTML = '👁️';
+                    eye.title = '显示完整地址';
+                    eye.dataset.revealed = '0';
+                    return;
+                }
+
+                // 请求明文
+                const url = await revealSubscriptionUrl(tokenStr);
+                if (!url) {
+                    showToast('获取明文订阅链接失败', 'error');
+                    return;
+                }
+                textEl.textContent = url;
+                eye.innerHTML = '🙈';
+                eye.title = '隐藏地址';
+                eye.dataset.revealed = '1';
+            });
+
+            await loadConfigSelect();
+            await loadConfig(false);
+            loadSubscriptions();
+
+            setInterval(loadSubscriptions, 30000);
+
+            // 脚本输出模态框：点击遮罩关闭
+            const modal = document.getElementById('scriptModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        closeScriptModal();
+                    }
+                });
+            }
+        });
+    </script>
+
+    <div id="scriptModal" class="script-modal-backdrop">
+        <div class="script-modal">
+            <div class="script-modal-header">
+                <span id="scriptModalTitle">脚本输出</span>
+                <button type="button" onclick="closeScriptModal()">×</button>
+            </div>
+            <div class="script-modal-body">
+                <pre id="scriptModalBody"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div id="customRuleModal" class="script-modal-backdrop">
+        <div class="script-modal">
+            <div class="script-modal-header">
+                <span id="customRuleModalTitle">自定义路由</span>
+                <button type="button" onclick="closeCustomRulesModal()">×</button>
+            </div>
+            <div class="custom-rule-modal-body">
+                <div class="help-text" style="margin-bottom:8px;">
+                    仅对当前客户端生效；每行一条规则；将按所选位置插入到「全局路由规则」上方/下方。<br>
+                    Token: <code id="customRuleModalToken"></code>
+                </div>
+                <div class="custom-rule-position">
+                    <label><input type="radio" name="customRulePos" id="customRulePosBefore" value="before"> 添加在全局路由上方</label>
+                    <label><input type="radio" name="customRulePos" id="customRulePosAfter" value="after" checked> 添加在全局路由下方</label>
+                </div>
+                <textarea id="customRuleTextarea" placeholder="每行一条规则"></textarea>
+                <div class="help-text" style="margin-top:6px;">规则为空时不可保存</div>
+            </div>
+            <div class="custom-rule-modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeCustomRulesModal()">取消</button>
+                <button type="button" class="btn btn-primary" id="customRuleSaveBtn" disabled>保存</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

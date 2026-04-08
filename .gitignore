@@ -1,0 +1,12 @@
+node_modules/
+npm-debug.log
+.env
+*.log
+.DS_Store
+conf/*.conf
+!conf/.gitkeep
+data/config.json
+data/tokens.json
+data/login-attempts.json
+!data/.gitkeep
+

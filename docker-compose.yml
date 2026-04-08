@@ -1,0 +1,32 @@
+version: '3.8'
+
+# 默认桥接：仅合并订阅、写 conf 可用。若需在容器内对「宿主机」执行 wg set：
+# Linux 下可改为 network_mode: host，并 cap_add: [NET_ADMIN]，去掉 ports，设置 PORT；见 README。
+
+services:
+  wireguard-config-merger:
+    build: .
+    container_name: wireguard-config-merger
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CONF_DIR=/app/conf
+      - CONFIG_FILE=/app/data/config.json
+      - TOKEN_FILE=/app/data/tokens.json
+      - SCRIPT_DIR=/app/script
+      - WEB_USERNAME=admin
+      - WEB_PASSWORD=admin123
+    volumes:
+      # 需 Web「新增客户端」写入 conf 时不要加 :ro；仅合并订阅可改为 :ro
+      - ./conf:/app/conf
+      - ./data:/app/data
+      - ./script:/app/script
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
