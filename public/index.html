@@ -150,6 +150,72 @@
             margin-bottom: 0;
         }
 
+        /* 订阅源开关：绿色开启=启用，灰色关闭=禁用 */
+        .url-switch-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+            flex-shrink: 0;
+            font-size: 13px;
+            color: #333;
+            padding: 0 4px;
+        }
+
+        .url-switch {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 36px;
+            height: 20px;
+            border-radius: 12px;
+            background: #c8c8c8;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .url-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transition: left 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .url-switch:checked {
+            background: #28a745;
+        }
+
+        .url-switch:checked::after {
+            left: 18px;
+        }
+
+        .url-switch:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .url-switch-text {
+            font-weight: 600;
+        }
+
+        .url-item.disabled {
+            opacity: 0.55;
+        }
+
+        .url-item.disabled .url-input-wrapper input {
+            background: #f3f3f3;
+            color: #888;
+        }
+
         .url-input-wrapper {
             flex: 1;
             position: relative;
@@ -787,7 +853,7 @@
                             <label>订阅源地址</label>
                             <div class="url-list" id="urlList"></div>
                             <button type="button" class="btn btn-add btn-small" onclick="addUrlInput()">+ 添加订阅源</button>
-                            <div class="help-text">支持多个 Clash 订阅源地址</div>
+                            <div class="help-text">支持多个 Clash 订阅源地址；同一时间只能 <b>启用一个</b>，全部关闭将自动启用「故障直连」兜底</div>
                         </div>
 
                         <!-- WireGuard 配置（单组模式） -->
@@ -1086,7 +1152,10 @@
                 // 填充订阅源地址
                 const urlList = document.getElementById('urlList');
                 urlList.innerHTML = '';
-                config.configUrls.forEach((url, idx) => addUrlInput(url, idx));
+                (config.configUrls || []).forEach((item, idx) => {
+                    const norm = normalizeUrlItem(item);
+                    addUrlInput(norm.url, idx, norm.enabled);
+                });
 
                 renderWgProfilesFromConfig(config.wgProfiles);
                 document.getElementById('prependRules').value = config.prependRules.join('\n');
@@ -1142,22 +1211,29 @@
                     if (!i.classList.contains('masked') || i.dataset.realValue) return;
                     const idx = parseInt(i.dataset.urlIndex || '', 10);
                     if (!Number.isNaN(idx) && revealedConfigUrlsCache && revealedConfigUrlsCache[idx]) {
-                        i.dataset.realValue = revealedConfigUrlsCache[idx];
+                        i.dataset.realValue = (revealedConfigUrlsCache[idx].url || revealedConfigUrlsCache[idx]);
                         return;
                     }
-                    const hit = (revealedConfigUrlsCache || []).find(u => maskUrl(u) === i.value);
-                    if (hit) i.dataset.realValue = hit;
+                    const hit = (revealedConfigUrlsCache || []).find(u => maskUrl((u && u.url) || u) === i.value);
+                    if (hit) i.dataset.realValue = (hit.url || hit);
                 });
             }
 
-            const configUrls = Array.from(urlInputs)
-                .map(input => {
-                    if (input.classList.contains('masked') && input.dataset.realValue) {
-                        return input.dataset.realValue.trim();
-                    }
-                    return input.value.trim();
-                })
-                .filter(url => url);
+            const rows = document.querySelectorAll('.url-item');
+            const configUrls = Array.from(rows).map((row, idx) => {
+                const input = row.querySelector('.url-input-wrapper input');
+                const sw = row.querySelector('.url-switch');
+                let value;
+                if (input.classList.contains('masked') && input.dataset.realValue) {
+                    value = input.dataset.realValue.trim();
+                } else {
+                    value = input.value.trim();
+                }
+                return {
+                    url: value,
+                    enabled: !!(sw && sw.checked)
+                };
+            }).filter(item => item.url);
 
             const prependRulesText = document.getElementById('prependRules').value;
             const prependRules = prependRulesText
@@ -1199,30 +1275,77 @@
         // 脱敏URL函数
         function maskUrl(url) {
             if (!url || url.length < 20) return url;
-            
+
             // 提取协议
             const protocolEnd = url.indexOf('://');
             if (protocolEnd === -1) return url;
-            
+
             const protocol = url.substring(0, protocolEnd + 3);
             const rest = url.substring(protocolEnd + 3);
-            
+
             // 显示前5个字符和后5个字符
             const visibleStart = rest.substring(0, 5);
             const visibleEnd = rest.substring(rest.length - 5);
-            
+
             return `${protocol}${visibleStart}${'*'.repeat(Math.min(30, rest.length - 10))}${visibleEnd}`;
         }
 
-        function addUrlInput(value = '', urlIndex = null) {
+        function normalizeUrlItem(item) {
+            if (typeof item === 'string') {
+                return { url: item, enabled: true };
+            }
+            if (item && typeof item === 'object') {
+                return {
+                    url: typeof item.url === 'string' ? item.url : '',
+                    enabled: item.enabled === true
+                };
+            }
+            return { url: '', enabled: true };
+        }
+
+        function applyUrlSwitchExclusion(changed) {
+            if (changed && changed.checked) {
+                document.querySelectorAll('.url-switch').forEach(function(sw) {
+                    if (sw !== changed) {
+                        sw.checked = false;
+                        const row = sw.closest('.url-item');
+                        if (row) row.classList.add('disabled');
+                    }
+                });
+            }
+            if (changed) {
+                const row = changed.closest('.url-item');
+                if (row) row.classList.toggle('disabled', !changed.checked);
+            }
+        }
+
+        function addUrlInput(value = '', urlIndex = null, enabled = true) {
             const urlList = document.getElementById('urlList');
             const urlItem = document.createElement('div');
-            urlItem.className = 'url-item';
-            
+            urlItem.className = 'url-item' + (enabled ? '' : ' disabled');
+
+            // 启用 / 禁用 switch
+            const switchLabel = document.createElement('label');
+            switchLabel.className = 'url-switch-label';
+            switchLabel.title = '开启=启用（互斥：同时只允许一个启用）';
+            const switchEl = document.createElement('input');
+            switchEl.type = 'checkbox';
+            switchEl.className = 'url-switch';
+            switchEl.checked = enabled;
+            switchEl.addEventListener('change', function() {
+                applyUrlSwitchExclusion(switchEl);
+            });
+            const switchText = document.createElement('span');
+            switchText.className = 'url-switch-text';
+            switchText.textContent = '启用';
+            switchLabel.appendChild(switchEl);
+            switchLabel.appendChild(switchText);
+            urlItem.appendChild(switchLabel);
+
             // 创建输入框包装器
             const inputWrapper = document.createElement('div');
             inputWrapper.className = 'url-input-wrapper';
-            
+
             const input = document.createElement('input');
             input.type = 'text';
             input.placeholder = 'https://example.com/clash/config';
@@ -1231,14 +1354,14 @@
             if (typeof urlIndex === 'number') {
                 input.dataset.urlIndex = String(urlIndex);
             }
-            
+
             // 如果有值，初始显示为脱敏状态
             if (value) {
                 input.value = value;
                 input.classList.add('masked');
                 input.readOnly = true;
             }
-            
+
             // 眼睛按钮
             const eyeBtn = document.createElement('button');
             eyeBtn.type = 'button';
@@ -1246,17 +1369,18 @@
             eyeBtn.innerHTML = '👁️';
             eyeBtn.title = '显示/隐藏完整地址';
             eyeBtn.onclick = () => toggleUrlVisibility(input, eyeBtn);
-            
+
+            inputWrapper.appendChild(input);
+            inputWrapper.appendChild(eyeBtn);
+            urlItem.appendChild(inputWrapper);
+
             // 删除按钮
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.className = 'btn btn-danger btn-small';
             removeBtn.textContent = '删除';
             removeBtn.onclick = () => removeUrlInput(removeBtn);
-            
-            inputWrapper.appendChild(input);
-            inputWrapper.appendChild(eyeBtn);
-            urlItem.appendChild(inputWrapper);
+
             urlItem.appendChild(removeBtn);
             urlList.appendChild(urlItem);
         }
@@ -1269,7 +1393,9 @@
             if (handleAuthError(resp)) return null;
             if (!resp.ok) return null;
             const data = await resp.json();
-            revealedConfigUrlsCache = (data && data.configUrls) || [];
+            const arr = (data && data.configUrls) || [];
+            // 归一化为 [{url, enabled}] 格式
+            revealedConfigUrlsCache = arr.map(normalizeUrlItem);
             return revealedConfigUrlsCache;
         }
 
@@ -1285,13 +1411,13 @@
                     // 优先按索引绑定（最稳定），否则尝试按打码值匹配
                     const i = parseInt(input.dataset.urlIndex || '', 10);
                     if (!Number.isNaN(i) && i >= 0 && i < arr.length) {
-                        input.dataset.realValue = arr[i];
+                        input.dataset.realValue = arr[i].url || '';
                     } else {
-                        const idx = arr.findIndex(u => maskUrl(u) === input.value);
+                        const idx = arr.findIndex(u => maskUrl(u.url) === input.value);
                         if (idx >= 0) {
-                            input.dataset.realValue = arr[idx];
+                            input.dataset.realValue = arr[idx].url || '';
                         } else if (arr.length === 1) {
-                            input.dataset.realValue = arr[0];
+                            input.dataset.realValue = arr[0].url || '';
                         }
                     }
                 }
@@ -1314,11 +1440,8 @@
         // 删除 URL 输入框
         function removeUrlInput(btn) {
             const urlList = document.getElementById('urlList');
-            if (urlList.children.length > 1) {
-                btn.parentElement.remove();
-            } else {
-                showToast('至少保留一个订阅源', 'error');
-            }
+            btn.parentElement.remove();
+            // 允许保留 0 个订阅源（全部禁用时由后端走「故障直连」兜底）
         }
 
         // 更新规则中的代理组名称

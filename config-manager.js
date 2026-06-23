@@ -9,6 +9,30 @@ function newProfileId() {
   return crypto.randomUUID ? crypto.randomUUID() : `wg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/**
+ * 归一化单条 configUrls 配置项，兼容旧 string 格式
+ * @param {string|object} item
+ * @returns {{url: string, enabled: boolean}}
+ */
+function normalizeConfigUrlItem(item) {
+  if (typeof item === 'string') {
+    return { url: item.trim(), enabled: true };
+  }
+  if (item && typeof item === 'object') {
+    const url = typeof item.url === 'string' ? item.url.trim() : '';
+    const enabled = item.enabled === true;
+    return { url, enabled };
+  }
+  return { url: '', enabled: false };
+}
+
+function normalizeConfigUrls(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map(normalizeConfigUrlItem)
+    .filter(item => item.url);
+}
+
 function normalizeWgProfile(p, index) {
   const dns = Array.isArray(p.wgDns) && p.wgDns.length > 0
     ? p.wgDns.map(d => (typeof d === 'string' ? d.trim() : '')).filter(Boolean)
@@ -29,7 +53,7 @@ function normalizeWgProfile(p, index) {
  * 旧版单组字段 -> wgProfiles
  */
 function migrateConfig(raw) {
-  const urls = Array.isArray(raw.configUrls) ? raw.configUrls : [];
+  const urls = normalizeConfigUrls(raw.configUrls);
   const rules = Array.isArray(raw.prependRules) ? raw.prependRules : [
     'IP-CIDR,192.168.0.0/16,🏠 Home',
     'IP-CIDR,10.0.0.0/8,🏠 Home',
@@ -149,6 +173,33 @@ function validateConfig(config) {
 
   if (!Array.isArray(config.configUrls)) {
     errors.push('configUrls 必须是数组');
+  } else {
+    const seen = new Set();
+    let enabledCount = 0;
+    config.configUrls.forEach((item, i) => {
+      const prefix = `configUrls[${i}]`;
+      if (!item || typeof item !== 'object') {
+        errors.push(`${prefix} 必须是对象 {url, enabled}`);
+        return;
+      }
+      if (typeof item.url !== 'string' || !item.url.trim()) {
+        errors.push(`${prefix}.url 不能为空`);
+      } else {
+        const u = item.url.trim();
+        if (seen.has(u)) {
+          errors.push(`${prefix}.url 与前面的订阅源重复: ${u}`);
+        }
+        seen.add(u);
+      }
+      if (typeof item.enabled !== 'boolean') {
+        errors.push(`${prefix}.enabled 必须是布尔值`);
+      } else if (item.enabled === true) {
+        enabledCount++;
+      }
+    });
+    if (enabledCount > 1) {
+      errors.push('订阅源只能有一个启用的（enabled 最多 1 个为 true）');
+    }
   }
 
   if (!Array.isArray(config.prependRules)) {
@@ -202,6 +253,8 @@ module.exports = {
   DEFAULT_CONFIG,
   migrateConfig,
   normalizeWgProfile,
+  normalizeConfigUrlItem,
+  normalizeConfigUrls,
   newProfileId
 };
 

@@ -12,7 +12,7 @@ async function fetchConfig(url) {
     const response = await axios.get(url, {
       timeout: 10000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'clash.meta'
       }
     });
     
@@ -105,17 +105,36 @@ function extractSubscriptionInfo(headers) {
 }
 
 /**
- * 从多个 URL 拉取并合并配置
- * @param {array} urls - 配置文件 URL 数组
+ * 从多个订阅源拉取并合并配置
+ * @param {Array<string|{url: string, enabled: boolean}>} urls - 订阅源列表
+ *   - 兼容旧 string[]：自动视为 enabled=true
+ *   - 新格式：只拉取 enabled=true 的源
  * @returns {Promise<object>} 合并后的配置对象和订阅信息
+ *
+ * 行为约定：
+ *   1. 没有任何 enabled 源（全部禁用）→ 返回「故障直连」兜底
+ *   2. 有 enabled 源但全部拉取失败 → 返回「故障直连」兜底
+ *   3. 至少一个成功 → 正常合并返回
  */
 async function fetchAndMergeConfigs(urls) {
+  const items = (Array.isArray(urls) ? urls : [])
+    .map(u => (typeof u === 'string' ? { url: u, enabled: true } : u))
+    .filter(it => it && typeof it.url === 'string' && it.url.trim() && it.enabled === true);
+
+  if (items.length === 0) {
+    console.warn('所有订阅源都已禁用，启用「故障直连」兜底');
+    return buildDirectFallback();
+  }
+
   const configs = [];
   const allSubscriptionInfos = [];
-  
-  for (const url of urls) {
+  let successCount = 0;
+
+  for (const item of items) {
+    const url = item.url;
     const result = await fetchConfig(url);
     if (result) {
+      successCount++;
       configs.push(result.config);
       if (result.subscriptionInfo) {
         // 添加订阅地址信息
@@ -124,15 +143,10 @@ async function fetchAndMergeConfigs(urls) {
       }
     }
   }
-  
-  if (configs.length === 0) {
-    console.warn('没有成功拉取任何配置');
-    return {
-      config: createEmptyConfig(),
-      subscriptionInfo: null,
-      allSubscriptionInfos: [],
-      remoteFetchOk: false
-    };
+
+  if (successCount === 0) {
+    console.warn('所有启用的订阅源均拉取失败，启用「故障直连」兜底');
+    return buildDirectFallback();
   }
 
   // 合并配置
@@ -183,6 +197,31 @@ function mergeConfigs(configs) {
   });
   
   return merged;
+}
+
+/**
+ * 生成「故障直连」兜底配置：所有订阅源都禁用或全部拉取失败时使用
+ * @returns {object} 含 DIRECT 节点 + 「故障直连」代理组的最小 Clash 配置
+ */
+function buildDirectFallback() {
+  return {
+    config: {
+      proxies: [
+        { name: 'DIRECT', type: 'direct', udp: true }
+      ],
+      'proxy-groups': [
+        {
+          name: '故障直连',
+          type: 'select',
+          proxies: ['DIRECT']
+        }
+      ],
+      rules: ['MATCH,故障直连']
+    },
+    subscriptionInfo: null,
+    allSubscriptionInfos: [],
+    remoteFetchOk: false
+  };
 }
 
 /**
@@ -313,6 +352,7 @@ module.exports = {
   fetchAndMergeConfigs,
   mergeConfigs,
   createEmptyConfig,
+  buildDirectFallback,
   appendWireGuardConfig,
   appendMultipleWireGuardProfiles
 };

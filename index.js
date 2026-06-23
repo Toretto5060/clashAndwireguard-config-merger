@@ -40,6 +40,35 @@ function validateWgClientName(name) {
   return typeof name === 'string' && /^[a-zA-Z0-9._-]+$/.test(name) && name.length >= 1 && name.length <= 64;
 }
 
+/**
+ * 获取生成订阅链接时应使用的「公网 origin」
+ *
+ * 优先级（从高到低）：
+ *   1. 环境变量 PUBLIC_BASE_URL：强制指定，含协议+域名+端口+可选路径前缀
+ *      例如 https://sub.example.com 或 https://example.com/clash
+ *   2. 反代头 X-Forwarded-Proto / X-Forwarded-Host / X-Forwarded-Prefix
+ *      （nginx 等反代默认携带，docker bridge / 容器直连时无）
+ *   3. Express 默认 req.protocol + req.get('host')（容器直连时拿到的是 socket 内网地址）
+ *
+ * 反代时务必让 nginx 传以下头，否则仍会拿到内网地址：
+ *   proxy_set_header Host              $host;
+ *   proxy_set_header X-Real-IP         $remote_addr;
+ *   proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+ *   proxy_set_header X-Forwarded-Proto $scheme;
+ *   proxy_set_header X-Forwarded-Host  $host;
+ */
+function getPublicOrigin(req) {
+  const envBase = (process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (envBase) return envBase;
+  const first = (v) => (v || '').split(',')[0].trim();
+  const xfProto = first(req.get('x-forwarded-proto'));
+  const xfHost = first(req.get('x-forwarded-host'));
+  const xfPrefix = first(req.get('x-forwarded-prefix')).replace(/\/+$/, '');
+  const protocol = xfProto || req.protocol;
+  const host = xfHost || req.get('host');
+  return `${protocol}://${host}${xfPrefix}`;
+}
+
 function runWgScript(scriptBase, args, res) {
   const scriptPath = path.join(SCRIPT_DIR, scriptBase);
   if (!fs.existsSync(scriptPath)) {
@@ -435,17 +464,25 @@ app.post('/api/auth/logout', (req, res) => {
 
 // 配置管理API - 获取配置
 app.get('/api/config', requireAuth, (req, res) => {
+  const configUrls = Array.isArray(appConfig.configUrls) ? appConfig.configUrls : [];
   res.json({
     ...appConfig,
     // 不返回明文订阅源地址：默认只下发打码后的
-    configUrls: (appConfig.configUrls || []).map(maskUrlForUi)
+    configUrls: configUrls.map(item => ({
+      url: maskUrlForUi((item && item.url) || ''),
+      enabled: !!(item && item.enabled === true)
+    }))
   });
 });
 
 // 获取订阅源明文（仅在点“眼睛”时按需拉取）
 app.get('/api/config/reveal-urls', requireAuth, (req, res) => {
+  const configUrls = Array.isArray(appConfig.configUrls) ? appConfig.configUrls : [];
   res.json({
-    configUrls: appConfig.configUrls || []
+    configUrls: configUrls.map(item => ({
+      url: (item && item.url) || '',
+      enabled: !!(item && item.enabled === true)
+    }))
   });
 });
 
@@ -490,7 +527,10 @@ app.get('/health', (req, res) => {
     available_configs: Object.keys(wireguardConfigs),
     configs: Object.keys(wireguardConfigs), // 保留旧字段以兼容
     configCount: Object.keys(wireguardConfigs).length,
-    configUrls: appConfig.configUrls,
+    configUrls: (appConfig.configUrls || []).map(item => ({
+      url: (item && item.url) || '',
+      enabled: !!(item && item.enabled === true)
+    })),
     wgProfiles: appConfig.wgProfiles
   });
 });
@@ -561,9 +601,7 @@ app.post('/api/tokens', requireAuth, (req, res) => {
     }
     
     // 生成完整的订阅URL（新格式包含配置名称）
-    const protocol = req.protocol;
-    const host = req.get('host');
-    const subscriptionUrl = `${protocol}://${host}/config/${configName}/${tokenObj.token}`;
+    const subscriptionUrl = `${getPublicOrigin(req)}/config/${configName}/${tokenObj.token}`;
     
     res.json({
       success: true,
@@ -583,11 +621,10 @@ app.get('/api/tokens', requireAuth, (req, res) => {
     const tokens = getAllTokens();
     
     // 生成完整的订阅URL（新格式包含配置名称）
-    const protocol = req.protocol;
-    const host = req.get('host');
-    
+    const origin = getPublicOrigin(req);
+
     const tokensWithUrl = tokens.map(t => {
-      const full = `${protocol}://${host}/config/${t.configName}/${t.token}`;
+      const full = `${origin}/config/${t.configName}/${t.token}`;
       const isActive = t.active !== false;
       return {
         ...t,
@@ -612,9 +649,7 @@ app.get('/api/tokens/:token/url', requireAuth, (req, res) => {
     if (!t) {
       return res.status(404).json({ error: 'Token不存在' });
     }
-    const protocol = req.protocol;
-    const host = req.get('host');
-    const full = `${protocol}://${host}/config/${t.configName}/${t.token}`;
+    const full = `${getPublicOrigin(req)}/config/${t.configName}/${t.token}`;
     res.json({
       token: t.token,
       active: t.active !== false,
@@ -848,16 +883,22 @@ app.get('/config/:configName/:token', async (req, res) => {
 
     const useRules = tokenObj.useRules !== false;
     const useWireGuard = tokenObj.useWireGuard !== false;
+    // 「全局路由」开关仅控制全局规则；自定义路由始终按客户端设置生效
     const globalRules = useRules ? (appConfig.prependRules || []) : [];
-    const customRules = useRules && Array.isArray(tokenObj.customRules)
+    const customRules = Array.isArray(tokenObj.customRules)
       ? tokenObj.customRules.map(s => String(s).trim()).filter(Boolean)
       : [];
     const customPos = tokenObj.customRulesPosition === 'before' ? 'before' : 'after';
-    const prependRules = useRules
-      ? (customPos === 'before'
+    let prependRules = [];
+    if (useRules) {
+      // 勾选全局路由时：按「自定义路由在全局路由上/下」拼接
+      prependRules = customPos === 'before'
         ? [...customRules, ...globalRules]
-        : [...globalRules, ...customRules])
-      : [];
+        : [...globalRules, ...customRules];
+    } else if (customRules.length > 0) {
+      // 未勾选全局路由但有自定义路由：自定义路由直接放在规则顶部
+      prependRules = [...customRules];
+    }
 
     function baseConfigWithOptionalPrependRules() {
       const cfg = JSON.parse(JSON.stringify(baseConfig));
@@ -1000,6 +1041,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`✓ Web管理界面: http://localhost:${PORT}`);
   console.log('\n当前配置:');
   console.log(`  - 订阅源: ${appConfig.configUrls.length > 0 ? appConfig.configUrls.length + ' 个' : '未配置'}`);
+  const enabledCount = (appConfig.configUrls || []).filter(u => u && u.enabled === true).length;
+  console.log(`  - 已启用订阅源: ${enabledCount} 个${enabledCount === 0 ? '（将启用故障直连兜底）' : ''}`);
   console.log(`  - CONF_DIR: ${CONF_DIR}`);
   const wgN = Array.isArray(appConfig.wgProfiles) ? appConfig.wgProfiles.length : 0;
   console.log(`  - WireGuard 配置组: ${wgN} 组`);
