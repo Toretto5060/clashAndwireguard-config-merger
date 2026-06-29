@@ -24,7 +24,11 @@ async function fetchConfig(url) {
       // 如果不是 YAML，尝试作为 JSON
       config = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
     }
-    
+
+    // 清洗不合规字段：部分订阅源会把 short-id 写成字符串 "null"，
+    // Clash/Clash Meta 不接受此值，运行时会报解析错误。统一改为空串。
+    sanitizeSubscriptionConfig(config);
+
     // 提取订阅信息
     const subscriptionInfo = extractSubscriptionInfo(response.headers);
     
@@ -161,6 +165,26 @@ async function fetchAndMergeConfigs(urls) {
     allSubscriptionInfos: allSubscriptionInfos,
     remoteFetchOk: true
   };
+}
+
+/**
+ * 清洗订阅源中不合规的字段值
+ *
+ * 背景：部分上游订阅源会把 short-id 写成字符串 "null"（带引号），
+ * 这是上游模板渲染时的占位符未替换，Clash/Clash Meta 解析时会报错。
+ * 合规写法是空串 ""，与"未设置 short-id"等价。
+ *
+ * @param {object} config - 解析后的订阅配置对象
+ */
+function sanitizeSubscriptionConfig(config) {
+  if (!config || typeof config !== 'object') return;
+  const proxies = Array.isArray(config.proxies) ? config.proxies : [];
+  proxies.forEach((proxy) => {
+    if (!proxy || typeof proxy !== 'object') return;
+    if (proxy['short-id'] === 'null') {
+      proxy['short-id'] = '';
+    }
+  });
 }
 
 /**
